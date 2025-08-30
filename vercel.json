@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "name": "watchmqtt-dashboard",
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "env": {
+    "VITE_API_BASE_URL": "https://407b6933bdea.ngrok-free.app",
+    "VITE_DEFAULT_BROKER": "local",
+    "VITE_REFRESH_INTERVAL_OVERVIEW": "300",
+    "VITE_REFRESH_INTERVAL_TIMESERIES": "30",
+    "VITE_REFRESH_INTERVAL_ROLLUPS": "300"
+  }
+}

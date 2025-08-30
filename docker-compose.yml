@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  dashboard:
+    build: .
+    container_name: watchmqtt-dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_BASE_URL=https://407b6933bdea.ngrok-free.app
+      - VITE_DEFAULT_BROKER=local
+      - VITE_REFRESH_INTERVAL_OVERVIEW=300
+      - VITE_REFRESH_INTERVAL_TIMESERIES=30
+      - VITE_REFRESH_INTERVAL_ROLLUPS=300
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
