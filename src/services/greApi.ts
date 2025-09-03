@@ -3,8 +3,6 @@ import {
   GRE_API_CONFIG, 
   Session, 
   Event,
-  SessionResponse, 
-  EventResponse,
   SessionStats, 
   SessionDuration, 
   ConnectedClient,
@@ -15,7 +13,6 @@ import {
   ConnectionInfoEvent,
   ActivityEvent,
   Subscription,
-  SubscriptionResponse,
   TopicSubscription,
   ClientTopicFootprint
 } from '../config/greApi'
@@ -33,7 +30,7 @@ export class GreApiService {
   // Get all sessions
   static async getAllSessions(): Promise<Session[]> {
     try {
-      const response = await greApi.get<SessionResponse>(GRE_API_CONFIG.ENDPOINTS.SESSIONS)
+      const response = await greApi.get<Session[]>(GRE_API_CONFIG.ENDPOINTS.SESSIONS)
       return response.data
     } catch (error) {
       console.error('Error fetching sessions:', error)
@@ -44,7 +41,7 @@ export class GreApiService {
   // Get currently connected clients (sessions without end_ts)
   static async getConnectedClients(): Promise<ConnectedClient[]> {
     try {
-      const response = await greApi.get<SessionResponse>(
+      const response = await greApi.get<Session[]>(
         `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?end_ts=is.null`
       )
       return response.data.map(session => ({
@@ -66,7 +63,7 @@ export class GreApiService {
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
       const isoDate = sevenDaysAgo.toISOString()
 
-      const response = await greApi.get<SessionResponse>(
+      const response = await greApi.get<Session[]>(
         `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?start_ts=gte.${isoDate}&end_ts=not.is.null`
       )
 
@@ -97,7 +94,7 @@ export class GreApiService {
         ? `${GRE_API_CONFIG.ENDPOINTS.EVENTS}?limit=${limit}&order=ts.desc`
         : `${GRE_API_CONFIG.ENDPOINTS.EVENTS}?order=ts.desc`
       
-      const response = await greApi.get<EventResponse>(url)
+      const response = await greApi.get<Event[]>(url)
       return response.data
     } catch (error) {
       console.error('Error fetching events:', error)
@@ -112,7 +109,7 @@ export class GreApiService {
       fromDate.setHours(fromDate.getHours() - hoursBack)
       const isoDate = fromDate.toISOString()
 
-      const response = await greApi.get<EventResponse>(
+      const response = await greApi.get<Event[]>(
         `${GRE_API_CONFIG.ENDPOINTS.EVENTS}?action=in.(connected,disconnected)&ts=gte.${isoDate}&order=ts.asc`
       )
       return response.data
@@ -129,7 +126,7 @@ export class GreApiService {
       fromDate.setHours(fromDate.getHours() - hoursBack)
       const isoDate = fromDate.toISOString()
 
-      const response = await greApi.get<EventResponse>(
+      const response = await greApi.get<Event[]>(
         `${GRE_API_CONFIG.ENDPOINTS.EVENTS}?action=in.(subscribe,unsubscribe)&ts=gte.${isoDate}&order=ts.asc`
       )
       return response.data
@@ -282,10 +279,10 @@ export class GreApiService {
       
       // Get all sessions that started or were active in the time range
       const [sessions, events] = await Promise.all([
-        greApi.get<SessionResponse>(
+        greApi.get<Session[]>(
           `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?start_ts=gte.${fromTime}&order=start_ts.asc`
         ),
-        greApi.get<EventResponse>(
+        greApi.get<Event[]>(
           `${GRE_API_CONFIG.ENDPOINTS.EVENTS}?action=in.(connected,disconnected)&ts=gte.${fromTime}&order=ts.asc`
         )
       ])
@@ -329,7 +326,7 @@ export class GreApiService {
     try {
       const fromTime = new Date(Date.now() - (hoursBack * 60 * 60 * 1000)).toISOString()
       
-      const response = await greApi.get<EventResponse>(
+      const response = await greApi.get<Event[]>(
         `${GRE_API_CONFIG.ENDPOINTS.EVENTS}?action=eq.checkpoint&ts=gt.${fromTime}&order=ts.asc`
       )
       
@@ -350,7 +347,7 @@ export class GreApiService {
     try {
       const fromTime = new Date(Date.now() - (hoursBack * 60 * 60 * 1000)).toISOString()
       
-      const response = await greApi.get<EventResponse>(
+      const response = await greApi.get<Event[]>(
         `${GRE_API_CONFIG.ENDPOINTS.EVENTS}?action=eq.conn_info&ts=gt.${fromTime}&order=ts.asc`
       )
       
@@ -387,7 +384,7 @@ export class GreApiService {
   // Get recent activity for audit feed
   static async getRecentActivity(limit: number = 50): Promise<ActivityEvent[]> {
     try {
-      const response = await greApi.get<EventResponse>(
+      const response = await greApi.get<Event[]>(
         `${GRE_API_CONFIG.ENDPOINTS.EVENTS}?action=in.(connected,disconnected,subscribe,unsubscribe,checkpoint,conn_info)&order=ts.desc&limit=${limit}`
       )
       
@@ -443,7 +440,7 @@ export class GreApiService {
   // Get active subscriptions with topic aggregation
   static async getActiveSubscriptions(): Promise<{ subscriptions: Subscription[], topicBreakdown: TopicSubscription[] }> {
     try {
-      const response = await greApi.get<SubscriptionResponse>(
+      const response = await greApi.get<Subscription[]>(
         `${GRE_API_CONFIG.ENDPOINTS.SUBSCRIPTIONS}?active=is.true&order=updated_at.desc`
       )
       
@@ -498,8 +495,8 @@ export class GreApiService {
   static async getClientTopicFootprints(): Promise<ClientTopicFootprint[]> {
     try {
       const [activeSubscriptions, allSubscriptions] = await Promise.all([
-        greApi.get<SubscriptionResponse>(`${GRE_API_CONFIG.ENDPOINTS.SUBSCRIPTIONS}?active=is.true`),
-        greApi.get<SubscriptionResponse>(`${GRE_API_CONFIG.ENDPOINTS.SUBSCRIPTIONS}`)
+        greApi.get<Subscription[]>(`${GRE_API_CONFIG.ENDPOINTS.SUBSCRIPTIONS}?active=is.true`),
+        greApi.get<Subscription[]>(`${GRE_API_CONFIG.ENDPOINTS.SUBSCRIPTIONS}`)
       ])
       
       // Count total clients per topic from all subscriptions
