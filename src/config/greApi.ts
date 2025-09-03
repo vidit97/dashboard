@@ -1,6 +1,6 @@
 // GRE API Configuration
 export const GRE_API_CONFIG = {
-  BASE_URL: import.meta.env.VITE_GRE_API_BASE_URL,
+  BASE_URL: import.meta.env.VITE_GRE_API_BASE_URL || 'https://rage-usr-ultra-limitation.trycloudflare.com/',
   ENDPOINTS: {
     SESSIONS: '/sessions',
     EVENTS: '/events',
