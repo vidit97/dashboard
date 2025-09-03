@@ -17,7 +17,8 @@
     }
   ],
   "env": {
-    "VITE_API_BASE_URL": "https://407b6933bdea.ngrok-free.app",
+    "VITE_API_BASE_URL": "https://0192b136359f.ngrok-free.app",
+    "VITE_GRE_API_BASE_URL": "https://rage-usr-ultra-limitation.trycloudflare.com/",
     "VITE_DEFAULT_BROKER": "local"
   }
 }

@@ -44,7 +44,7 @@ export default function Dashboard() {
 
   const handleTestAPI = async () => {
     try {
-      const response = await fetch('https://407b6933bdea.ngrok-free.app/api/v1/overview?broker=local', {
+      const response = await fetch('https://0192b136359f.ngrok-free.app/api/v1/overview?broker=local', {
         headers: { 'ngrok-skip-browser-warning': 'true' }
       })
       const data = await response.json()

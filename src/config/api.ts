@@ -1,6 +1,6 @@
 // API Configuration for WatchMQTT
 export const API_CONFIG = {
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'https://407b6933bdea.ngrok-free.app',
+  BASE_URL: import.meta.env.VITE_API_BASE_URL,
   DEFAULT_BROKER: import.meta.env.VITE_DEFAULT_BROKER || 'local',
   REFRESH_INTERVALS: {
     OVERVIEW: Number(import.meta.env.VITE_REFRESH_INTERVAL_OVERVIEW) * 1000 || 300000, // 5 minutes
