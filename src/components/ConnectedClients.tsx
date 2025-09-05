@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { MetricCard } from '../ui/StatCards'
 import { GreApiService, formatTimestamp } from '../services/greApi'
 import { ConnectedClient } from '../config/greApi'
+import { Session } from '../types/api'
+import SearchFilterTable from './SearchFilterTable'
 
 interface ConnectedClientsProps {
   className?: string
@@ -38,47 +40,130 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
   const [useMockData, setUseMockData] = useState(false)
   
   // Pagination state
-  const [currentPage, setCurrentPage] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(10)
   const [totalClients, setTotalClients] = useState(0)
-  const [hasMore, setHasMore] = useState(false)
-  const [loadingMore, setLoadingMore] = useState(false)
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalActiveClients, setTotalActiveClients] = useState(0) // Unfiltered total count
+  
+  // Search and filter state for SearchFilterTable
+  const [selectedFilters, setSelectedFilters] = useState({
+    client: [],
+    username: []
+  })
+  const [availableFilterData, setAvailableFilterData] = useState({
+    client: [],
+    username: []
+  })
+  
+  // Active sessions from API (using Session type for pagination compatibility)
+  const [activeSessions, setActiveSessions] = useState([])
+  
+  // All unfiltered active sessions for top users calculation
+  const [allActiveSessions, setAllActiveSessions] = useState([])
 
-  const fetchConnectedClients = useCallback(async (page = 0, append = false) => {
+  const fetchAvailableFilterData = useCallback(async () => {
     try {
-      if (append) {
-        setLoadingMore(true)
+      if (useMockData) {
+        const usernames = [...new Set(MOCK_CONNECTED_CLIENTS.map(c => c.username))]
+        const clientIds = [...new Set(MOCK_CONNECTED_CLIENTS.map(c => c.client))]
+        setAvailableFilterData({
+          client: clientIds.sort(),
+          username: usernames.sort()
+        })
       } else {
-        setLoading(true)
-        setCurrentPage(0)
+        // Get all active sessions to extract unique usernames and client IDs
+        const result = await GreApiService.getSessionsPaginated({ 
+          limit: 1000, 
+          filters: { 'end_ts': 'is.null' } 
+        })
+        const usernames = [...new Set(result.data.map(s => s.username || 'Unknown'))]
+        const clientIds = [...new Set(result.data.map(s => s.client))]
+        setAvailableFilterData({
+          client: clientIds.sort(),
+          username: usernames.sort()
+        })
       }
+    } catch (err) {
+      console.error('Error fetching filter data:', err)
+      const usernames = [...new Set(MOCK_CONNECTED_CLIENTS.map(c => c.username))]
+      const clientIds = [...new Set(MOCK_CONNECTED_CLIENTS.map(c => c.client))]
+      setAvailableFilterData({
+        client: clientIds.sort(),
+        username: usernames.sort()
+      })
+    }
+  }, [useMockData])
+
+  const fetchConnectedClients = useCallback(async (page = 1, resetData = true) => {
+    try {
+      setLoading(true)
       setError(null)
       
       if (useMockData) {
-        // Use mock data
-        if (append) {
-          // For mock data, don't append - just show the same data
-          setHasMore(false)
-        } else {
-          setConnectedClients(MOCK_CONNECTED_CLIENTS)
-          setTotalClients(MOCK_CONNECTED_CLIENTS.length)
-          setHasMore(false)
+        // Apply tag-based filters to mock data
+        let filteredData = MOCK_CONNECTED_CLIENTS
+        
+        if (selectedFilters.client.length > 0) {
+          filteredData = filteredData.filter(c => selectedFilters.client.includes(c.client))
         }
+        
+        if (selectedFilters.username.length > 0) {
+          filteredData = filteredData.filter(c => selectedFilters.username.includes(c.username))
+        }
+        
+        setConnectedClients(filteredData)
+        setActiveSessions([]) // Mock data uses different structure
+        setTotalClients(filteredData.length)
+        setTotalPages(1)
+        setCurrentPage(1)
+        setTotalActiveClients(MOCK_CONNECTED_CLIENTS.length) // Always show total unfiltered count
       } else {
-        // Fetch real paginated data
-        const offset = page * pageSize
-        const result = await GreApiService.getConnectedClientsPaginated(pageSize, offset)
-        
-        if (append) {
-          // Append new data to existing
-          setConnectedClients(prev => [...prev, ...result.clients])
-        } else {
-          // Replace with fresh data
-          setConnectedClients(result.clients)
+        // First, get total unfiltered count for the "Connected Now" metric
+        if (resetData) { // Only fetch total count when resetting data, not during pagination
+          const totalResult = await GreApiService.getSessionsPaginated({
+            limit: 1,
+            offset: 0,
+            filters: { 'end_ts': 'is.null' } // Only active sessions
+          })
+          setTotalActiveClients(totalResult.totalCount)
+          
+          // Also fetch all unfiltered sessions for top users calculation
+          const allSessionsResult = await GreApiService.getSessionsPaginated({
+            limit: 1000, // Get a large number to capture all active sessions
+            offset: 0,
+            filters: { 'end_ts': 'is.null' } // Only active sessions, no other filters
+          })
+          setAllActiveSessions(allSessionsResult.data)
         }
         
-        setTotalClients(result.total)
-        setHasMore(result.hasMore)
+        // Build filters for active sessions (end_ts is null)
+        const filters: Record<string, string> = {
+          'end_ts': 'is.null'
+        }
+        
+        // Apply tag-based filters for client IDs
+        if (selectedFilters.client.length > 0) {
+          filters['client'] = `in.(${selectedFilters.client.join(',')})`
+        }
+        
+        // Apply tag-based filters for usernames
+        if (selectedFilters.username.length > 0) {
+          filters['username'] = `in.(${selectedFilters.username.join(',')})`
+        }
+        
+        // Fetch paginated active sessions
+        const offset = (page - 1) * pageSize
+        const result = await GreApiService.getSessionsPaginated({
+          limit: pageSize,
+          offset,
+          filters
+        })
+        
+        setActiveSessions(result.data)
+        setConnectedClients([]) // Clear old format data
+        setTotalClients(result.totalCount)
+        setTotalPages(Math.ceil(result.totalCount / pageSize))
         setCurrentPage(page)
       }
       
@@ -89,34 +174,62 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
       console.error('Error fetching connected clients:', err)
       
       // Fallback to mock data if API fails
-      if (!useMockData && !append) {
+      if (!useMockData && resetData) {
         console.log('Falling back to mock data')
         setConnectedClients(MOCK_CONNECTED_CLIENTS)
         setTotalClients(MOCK_CONNECTED_CLIENTS.length)
-        setHasMore(false)
+        setTotalPages(1)
+        setCurrentPage(1)
       }
     } finally {
       setLoading(false)
-      setLoadingMore(false)
     }
-  }, [useMockData, pageSize])
+  }, [useMockData, pageSize, selectedFilters])
 
-  const loadMore = () => {
-    if (!loadingMore && hasMore) {
-      fetchConnectedClients(currentPage + 1, true)
+  const handleSearch = () => {
+    setCurrentPage(1)
+    fetchConnectedClients(1, true)
+  }
+
+  const handlePageChange = (newPage: number) => {
+    console.log('Page change requested:', { currentPage, newPage, totalPages })
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage) // Update state first
+      fetchConnectedClients(newPage, false)
     }
   }
 
-  useEffect(() => {
-    fetchConnectedClients()
-    
-    const interval = setInterval(fetchConnectedClients, refreshInterval * 1000)
-    return () => clearInterval(interval)
-  }, [fetchConnectedClients, refreshInterval])
+  const clearAllFilters = () => {
+    setSelectedFilters({
+      client: [],
+      username: []
+    })
+    setCurrentPage(1)
+    fetchConnectedClients(1, true)
+  }
 
-  // Calculate user breakdown for top 5 display
-  const userBreakdown = connectedClients.reduce((acc, client) => {
-    acc[client.username] = (acc[client.username] || 0) + 1
+  useEffect(() => {
+    fetchAvailableFilterData()
+    fetchConnectedClients(1, true) // Always start from page 1 on mount
+    
+    const interval = setInterval(() => {
+      fetchConnectedClients(currentPage, false)
+    }, refreshInterval * 1000)
+    return () => clearInterval(interval)
+  }, [fetchConnectedClients, fetchAvailableFilterData, refreshInterval]) // Removed currentPage dependency
+
+  // Separate effect for when currentPage changes (for manual page navigation)
+  useEffect(() => {
+    if (currentPage > 1) { // Only fetch if not on first page
+      fetchConnectedClients(currentPage, false)
+    }
+  }, [currentPage, fetchConnectedClients])
+
+  // Calculate user breakdown for top 5 display using unfiltered data
+  const userBreakdownData = useMockData ? connectedClients : allActiveSessions
+  const userBreakdown = userBreakdownData.reduce((acc, client) => {
+    const username = (useMockData ? client.username : client.username) || 'Unknown'
+    acc[username] = (acc[username] || 0) + 1
     return acc
   }, {})
 
@@ -129,7 +242,7 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
       <div className="chart-header">
         <h2 className="chart-title">Connected Clients</h2>
         <div className="chart-controls">
-          <button onClick={fetchConnectedClients} disabled={loading} className="button-secondary">
+          <button onClick={() => fetchConnectedClients(1, true)} disabled={loading} className="button-secondary">
             {loading ? 'Loading...' : 'Refresh'}
           </button>
           <label className="mock-data-toggle">
@@ -143,6 +256,17 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
         </div>
       </div>
 
+      {/* KPI Card - Total Active Sessions (Unfiltered) */}
+      <div style={{ marginBottom: '24px' }}>
+        <MetricCard
+          label="Connected Now"
+          value={totalActiveClients.toString()}
+          loading={loading}
+          color="#10b981"
+          unit="clients"
+        />
+      </div>
+
       {error && !useMockData && (
         <div className="error-message">
           Error: {error}
@@ -154,17 +278,6 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
           </button>
         </div>
       )}
-
-      {/* KPI Card */}
-      <div style={{ marginBottom: '24px' }}>
-        <MetricCard
-          label="Connected Now"
-          value={totalClients.toString()}
-          loading={loading}
-          color="#10b981"
-          unit="clients"
-        />
-      </div>
 
       {/* User Breakdown */}
       {!loading && (
@@ -195,75 +308,54 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
         </div>
       )}
 
-      {/* Connected Clients Table */}
-      {!loading && connectedClients.length > 0 && (
-        <div className="connected-clients-table">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 className="breakdown-title">Active Sessions</h3>
-            <div style={{ fontSize: '14px', color: '#6b7280' }}>
-              Showing {connectedClients.length} of {totalClients} sessions
-            </div>
-          </div>
-          <div className="table-container">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Client ID</th>
-                  <th>Username</th>
-                  <th>Connected Since</th>
-                  <th>Duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                {connectedClients.map((client) => {
-                  const duration = client.start_ts 
-                    ? Math.floor((Date.now() - new Date(client.start_ts).getTime()) / 60000)
-                    : 0
-                  
-                  return (
-                    <tr key={client.session_id}>
-                      <td>{client.client}</td>
-                      <td>{client.username}</td>
-                      <td>{client.start_ts ? formatTimestamp(client.start_ts) : 'Unknown'}</td>
-                      <td>{duration > 0 ? `${duration}m` : 'Just now'}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          
-          {/* Pagination Controls */}
-          {hasMore && (
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'center', 
-              marginTop: '16px', 
-              padding: '16px',
-              borderTop: '1px solid #e5e7eb'
-            }}>
-              <button
-                onClick={loadMore}
-                disabled={loadingMore}
-                className="button-secondary"
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: loadingMore ? '#f3f4f6' : '#3b82f6',
-                  color: loadingMore ? '#6b7280' : '#ffffff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: loadingMore ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {loadingMore ? 'Loading...' : `Load More (${totalClients - connectedClients.length} remaining)`}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+      {/* SearchFilterTable Component */}
+      <SearchFilterTable
+        title="Active Sessions"
+        data={useMockData ? connectedClients : activeSessions}
+        totalCount={totalClients}
+        loading={loading}
+        error={error}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        columns={[
+          { key: 'client', label: 'Client ID' },
+          { key: 'username', label: 'Username', render: (value) => value || 'Unknown' },
+          { 
+            key: 'start_ts', 
+            label: 'Connected Since',
+            render: (value) => {
+              if (!value) return 'Unknown'
+              const date = new Date(value)
+              return `${date.toLocaleDateString()}, ${date.toLocaleTimeString()}`
+            }
+          },
+          { 
+            key: 'duration', 
+            label: 'Duration',
+            render: (_, row) => {
+              const startTime = useMockData ? row.start_ts : row.start_ts
+              if (!startTime) return '0m'
+              const duration = Math.floor((Date.now() - new Date(startTime).getTime()) / 60000)
+              return `${duration}m`
+            }
+          }
+        ]}
+        filterConfigs={[
+          { key: 'client', label: 'Client IDs', searchable: true, type: 'multiselect' },
+          { key: 'username', label: 'Usernames', searchable: true, type: 'multiselect' }
+        ]}
+        availableFilterData={availableFilterData}
+        selectedFilters={selectedFilters}
+        onFilterChange={setSelectedFilters}
+        onPageChange={handlePageChange}
+        onRefresh={() => fetchConnectedClients(currentPage, false)}
+        onClearFilters={clearAllFilters}
+        className="connected-clients-section"
+      />
 
       {lastUpdated && (
-        <div className="last-updated">
+        <div className="last-updated" style={{ marginTop: '16px', fontSize: '12px', color: '#6b7280' }}>
           Last updated: {lastUpdated.toLocaleString()}
           {useMockData && <span style={{ color: '#f59e0b' }}> (Using Mock Data)</span>}
         </div>

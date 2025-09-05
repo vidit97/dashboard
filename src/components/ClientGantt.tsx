@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { GreApiService, formatShortTime, formatDuration } from '../services/greApi'
 import { ClientGanttEntry } from '../config/greApi'
+import SearchFilterTable from './SearchFilterTable'
 
 interface ClientGanttProps {
   className?: string
@@ -48,6 +49,32 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
   const [error, setError] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [useMockData, setUseMockData] = useState(false)
+
+  // Filtering state
+  const [filteredGanttData, setFilteredGanttData] = useState([])
+  const [selectedFilters, setSelectedFilters] = useState({
+    client: [],
+    username: []
+  })
+  const [availableFilterData, setAvailableFilterData] = useState({
+    client: [],
+    username: []
+  })
+  const [searchInputs, setSearchInputs] = useState({
+    client: '',
+    username: ''
+  })
+  const [showDropdowns, setShowDropdowns] = useState({
+    client: false,
+    username: false
+  })
+
+  // Pagination for SearchFilterTable
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [filteredTableEntries, setFilteredTableEntries] = useState([])
+  const [totalClients, setTotalClients] = useState(0)
+  const pageSize = 10
 
   const fetchGanttData = useCallback(async () => {
     try {
@@ -103,10 +130,129 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
     return { left: leftPercent, width: Math.max(0.5, widthPercent) }
   }
 
+  // Filtering functions
+  const fetchAvailableFilterData = useCallback(async () => {
+    try {
+      const clients = [...new Set(ganttData.map(entry => entry.client))].sort()
+      const usernames = [...new Set(ganttData.map(entry => entry.username))].sort()
+      
+      setAvailableFilterData({
+        client: clients,
+        username: usernames
+      })
+    } catch (err) {
+      console.error('Error fetching filter data:', err)
+    }
+  }, [ganttData])
+
+  const applyFilters = useCallback((data: ClientGanttEntry[]) => {
+    let filtered = data
+
+    // Apply client filter
+    if (selectedFilters.client && selectedFilters.client.length > 0) {
+      filtered = filtered.filter(entry => 
+        selectedFilters.client.includes(entry.client)
+      )
+    }
+
+    // Apply username filter
+    if (selectedFilters.username && selectedFilters.username.length > 0) {
+      filtered = filtered.filter(entry => 
+        selectedFilters.username.includes(entry.username)
+      )
+    }
+
+    return filtered
+  }, [selectedFilters])
+
+  const updatePaginatedData = useCallback(() => {
+    const filtered = applyFilters(ganttData)
+    
+    // Set filtered data for Gantt chart
+    setFilteredGanttData(filtered)
+    
+    // Calculate pagination for table
+    const startIndex = (currentPage - 1) * pageSize
+    const endIndex = startIndex + pageSize
+    const paginatedEntries = filtered.slice(startIndex, endIndex)
+    
+    setFilteredTableEntries(paginatedEntries)
+    setTotalClients(filtered.length)
+    setTotalPages(Math.ceil(filtered.length / pageSize))
+  }, [ganttData, applyFilters, currentPage, pageSize])
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage)
+    }
+  }
+
+  const clearAllFilters = () => {
+    setSelectedFilters({
+      client: [],
+      username: []
+    })
+    setCurrentPage(1)
+  }
+
+  // Search functionality handlers
+  const handleSearchChange = (filterKey: string, value: string) => {
+    setSearchInputs(prev => ({ ...prev, [filterKey]: value }))
+  }
+
+  const handleToggleDropdown = (filterKey: string, show: boolean) => {
+    setShowDropdowns(prev => ({ ...prev, [filterKey]: show }))
+  }
+
+  const handleSelectValue = (filterKey: string, value: string) => {
+    const currentValues = selectedFilters[filterKey] || []
+    if (!currentValues.includes(value)) {
+      setSelectedFilters(prev => ({
+        ...prev,
+        [filterKey]: [...currentValues, value]
+      }))
+    }
+    // Clear search and close dropdown
+    setSearchInputs(prev => ({ ...prev, [filterKey]: '' }))
+    setShowDropdowns(prev => ({ ...prev, [filterKey]: false }))
+  }
+
+  const handleRemoveValue = (filterKey: string, value: string) => {
+    const currentValues = selectedFilters[filterKey] || []
+    setSelectedFilters(prev => ({
+      ...prev,
+      [filterKey]: currentValues.filter(v => v !== value)
+    }))
+  }
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!(event.target as Element)?.closest('.filter-controls')) {
+        setShowDropdowns({ client: false, username: false })
+      }
+    }
+    
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [])
+
+  useEffect(() => {
+    fetchAvailableFilterData()
+  }, [fetchAvailableFilterData])
+
+  useEffect(() => {
+    updatePaginatedData()
+  }, [updatePaginatedData])
+
+  useEffect(() => {
+    setCurrentPage(1) // Reset to first page when filters change
+  }, [selectedFilters])
+
   return (
     <div className={`chart-section ${className || ''}`}>
       <div className="chart-header">
-        <h2 className="chart-title">Session Timeline</h2>
+        <h2 className="chart-title">Client Timeline</h2>
         <div className="chart-controls">
           <select 
             className="select"
@@ -142,8 +288,297 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
         </div>
       )}
 
+      {/* Filter Controls */}
+      <div className="filter-controls" style={{ 
+        marginBottom: '20px', 
+        padding: '16px', 
+        backgroundColor: '#f9fafb', 
+        border: '1px solid #e5e7eb', 
+        borderRadius: '8px' 
+      }}>
+        <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#374151' }}>
+            Filter Client Sessions
+          </h4>
+          {(selectedFilters.client.length > 0 || selectedFilters.username.length > 0) && (
+            <span style={{ fontSize: '12px', color: '#6b7280' }}>
+              {selectedFilters.client.length + selectedFilters.username.length} filter{(selectedFilters.client.length + selectedFilters.username.length) !== 1 ? 's' : ''} active
+            </span>
+          )}
+        </div>
+        
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+          gap: '16px' 
+        }}>
+          {/* Client ID Filter */}
+          <div className="filter-group" style={{ position: 'relative', minWidth: '250px' }}>
+            <label style={{ fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px', display: 'block' }}>
+              Client IDs
+            </label>
+            
+            <div style={{ position: 'relative', marginBottom: selectedFilters.client.length > 0 ? '8px' : '0' }}>
+              <input
+                type="text"
+                placeholder="Search and select client ids..."
+                value={searchInputs.client}
+                onChange={(e) => handleSearchChange('client', e.target.value)}
+                onClick={() => handleToggleDropdown('client', true)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  backgroundColor: '#ffffff',
+                  boxSizing: 'border-box'
+                }}
+              />
+              
+              {/* Dropdown */}
+              {showDropdowns.client && (() => {
+                const filteredOptions = (availableFilterData.client || []).filter(value => 
+                  value.toLowerCase().includes(searchInputs.client.toLowerCase()) &&
+                  !selectedFilters.client.includes(value)
+                ).slice(0, 10)
+                
+                return filteredOptions.length > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    zIndex: 1000,
+                    maxHeight: '200px',
+                    overflowY: 'auto'
+                  }}>
+                    {filteredOptions.map((value) => (
+                      <div
+                        key={value}
+                        onClick={() => handleSelectValue('client', value)}
+                        style={{
+                          padding: '8px 12px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #f3f4f6',
+                          fontSize: '14px'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+                      >
+                        {value}
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+            </div>
+
+            {selectedFilters.client.length > 0 && (
+              <div style={{ 
+                display: 'flex', 
+                flexWrap: 'wrap', 
+                gap: '6px',
+                alignItems: 'flex-start'
+              }}>
+                {selectedFilters.client.map((value) => (
+                  <div
+                    key={value}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      backgroundColor: '#dbeafe',
+                      color: '#1e40af',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      gap: '4px',
+                      maxWidth: '200px',
+                      minHeight: '24px'
+                    }}
+                  >
+                    <span style={{ 
+                      overflow: 'hidden', 
+                      textOverflow: 'ellipsis', 
+                      whiteSpace: 'nowrap',
+                      flex: 1
+                    }}>
+                      {value}
+                    </span>
+                    <button
+                      onClick={() => handleRemoveValue('client', value)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'inherit',
+                        cursor: 'pointer',
+                        padding: '0',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        lineHeight: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Username Filter */}
+          <div className="filter-group" style={{ position: 'relative', minWidth: '250px' }}>
+            <label style={{ fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px', display: 'block' }}>
+              Usernames
+            </label>
+            
+            <div style={{ position: 'relative', marginBottom: selectedFilters.username.length > 0 ? '8px' : '0' }}>
+              <input
+                type="text"
+                placeholder="Search and select usernames..."
+                value={searchInputs.username}
+                onChange={(e) => handleSearchChange('username', e.target.value)}
+                onClick={() => handleToggleDropdown('username', true)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  backgroundColor: '#ffffff',
+                  boxSizing: 'border-box'
+                }}
+              />
+              
+              {/* Dropdown */}
+              {showDropdowns.username && (() => {
+                const filteredOptions = (availableFilterData.username || []).filter(value => 
+                  value.toLowerCase().includes(searchInputs.username.toLowerCase()) &&
+                  !selectedFilters.username.includes(value)
+                ).slice(0, 10)
+                
+                return filteredOptions.length > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    zIndex: 1000,
+                    maxHeight: '200px',
+                    overflowY: 'auto'
+                  }}>
+                    {filteredOptions.map((value) => (
+                      <div
+                        key={value}
+                        onClick={() => handleSelectValue('username', value)}
+                        style={{
+                          padding: '8px 12px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #f3f4f6',
+                          fontSize: '14px'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+                      >
+                        {value}
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+            </div>
+
+            {selectedFilters.username.length > 0 && (
+              <div style={{ 
+                display: 'flex', 
+                flexWrap: 'wrap', 
+                gap: '6px',
+                alignItems: 'flex-start'
+              }}>
+                {selectedFilters.username.map((value) => (
+                  <div
+                    key={value}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      backgroundColor: '#d1fae5',
+                      color: '#065f46',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      gap: '4px',
+                      maxWidth: '200px',
+                      minHeight: '24px'
+                    }}
+                  >
+                    <span style={{ 
+                      overflow: 'hidden', 
+                      textOverflow: 'ellipsis', 
+                      whiteSpace: 'nowrap',
+                      flex: 1
+                    }}>
+                      {value}
+                    </span>
+                    <button
+                      onClick={() => handleRemoveValue('username', value)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'inherit',
+                        cursor: 'pointer',
+                        padding: '0',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        lineHeight: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
+          <button
+            onClick={clearAllFilters}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#f3f4f6',
+              color: '#374151',
+              border: '1px solid #d1d5db',
+              borderRadius: '6px',
+              fontSize: '14px',
+              cursor: 'pointer',
+              fontWeight: '500'
+            }}
+            disabled={selectedFilters.client.length === 0 && selectedFilters.username.length === 0}
+          >
+            Clear All
+          </button>
+        </div>
+      </div>
+
       {/* Gantt Chart */}
-      {!loading && ganttData.length > 0 && (
+      {!loading && filteredGanttData.length > 0 && (
         <div className="gantt-container">
           <div className="gantt-header">
             <div className="gantt-time-axis">
@@ -164,7 +599,7 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
           </div>
           
           <div className="gantt-body">
-            {ganttData.map((client, index) => (
+            {filteredGanttData.map((client, index) => (
               <div key={client.client} className="gantt-row">
                 <div className="gantt-row-label">
                   <div className="client-name">{client.client.substring(0, 20)}...</div>
@@ -198,9 +633,12 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
         </div>
       )}
 
-      {!loading && ganttData.length === 0 && !useMockData && (
+      {!loading && filteredGanttData.length === 0 && (
         <div className="no-data">
-          No session data available for the selected time range
+          {ganttData.length === 0 
+            ? "No session data available for the selected time range"
+            : "No clients match the selected filters"
+          }
         </div>
       )}
 
@@ -210,6 +648,51 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
           {useMockData && <span style={{ color: '#f59e0b' }}> (Using Mock Data)</span>}
         </div>
       )}
+
+      {/* SearchFilterTable Component for Client Sessions - Table Only */}
+      <SearchFilterTable
+        title="Client Sessions"
+        data={filteredTableEntries}
+        totalCount={totalClients}
+        loading={loading}
+        error={error}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        columns={[
+          { key: 'client', label: 'Client ID' },
+          { key: 'username', label: 'Username' },
+          { 
+            key: 'sessions', 
+            label: 'Sessions',
+            render: (sessions) => `${sessions.length} session${sessions.length !== 1 ? 's' : ''}`
+          },
+          { 
+            key: 'sessions', 
+            label: 'Active Sessions',
+            render: (sessions) => {
+              const activeSessions = sessions.filter(s => s.isActive)
+              return `${activeSessions.length} active`
+            }
+          },
+          { 
+            key: 'sessions', 
+            label: 'Total Duration',
+            render: (sessions) => {
+              const totalDuration = sessions.reduce((sum, session) => sum + (session.duration || 0), 0)
+              return formatDuration(totalDuration)
+            }
+          }
+        ]}
+        filterConfigs={[]}
+        availableFilterData={{}}
+        selectedFilters={{}}
+        onFilterChange={() => {}}
+        onPageChange={handlePageChange}
+        onRefresh={fetchGanttData}
+        onClearFilters={() => {}}
+        className=""
+      />
     </div>
   )
 }

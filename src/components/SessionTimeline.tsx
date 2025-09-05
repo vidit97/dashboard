@@ -2,6 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { GreApiService, formatTimestamp, formatShortTime } from '../services/greApi'
 import { SessionTimelineEntry } from '../config/greApi'
+import SearchFilterTable from './SearchFilterTable'
+
+// Type assertion for Recharts components to avoid TypeScript issues
+const Chart = AreaChart as any
+const AreaComponent = Area as any
+const XAxisComponent = XAxis as any
+const YAxisComponent = YAxis as any
+const TooltipComponent = Tooltip as any
 
 interface SessionTimelineProps {
   className?: string
@@ -47,11 +55,28 @@ const MOCK_TIMELINE_DATA: SessionTimelineEntry[] = [
 export default function SessionTimeline({ className, refreshInterval = 60 }: SessionTimelineProps) {
   const [timelineData, setTimelineData] = useState([])
   const [sessionEntries, setSessionEntries] = useState(MOCK_TIMELINE_DATA)
+  const [filteredSessionEntries, setFilteredSessionEntries] = useState(MOCK_TIMELINE_DATA)
   const [timeRange, setTimeRange] = useState('24h')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [useMockData, setUseMockData] = useState(false)
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(10)
+  const [totalSessions, setTotalSessions] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  
+  // Search and filter state for SearchFilterTable
+  const [selectedFilters, setSelectedFilters] = useState({
+    client: [],
+    username: []
+  })
+  const [availableFilterData, setAvailableFilterData] = useState({
+    client: [],
+    username: []
+  })
 
   const processTimelineData = useCallback((entries: SessionTimelineEntry[]) => {
     // Create 5-minute buckets for the chart
@@ -104,6 +129,65 @@ export default function SessionTimeline({ className, refreshInterval = 60 }: Ses
     return buckets
   }, [timeRange])
 
+  const fetchAvailableFilterData = useCallback(async () => {
+    try {
+      if (useMockData) {
+        const usernames = [...new Set(MOCK_TIMELINE_DATA.map(s => s.username))]
+        const clientIds = [...new Set(MOCK_TIMELINE_DATA.map(s => s.client))]
+        setAvailableFilterData({
+          client: clientIds.sort(),
+          username: usernames.sort()
+        })
+      } else {
+        const hoursBack = timeRange === '24h' ? 24 : 168
+        const timeline = await GreApiService.getSessionTimeline(hoursBack)
+        const usernames = [...new Set(timeline.map(s => s.username))]
+        const clientIds = [...new Set(timeline.map(s => s.client))]
+        setAvailableFilterData({
+          client: clientIds.sort(),
+          username: usernames.sort()
+        })
+      }
+    } catch (err) {
+      console.error('Error fetching filter data:', err)
+      const usernames = [...new Set(MOCK_TIMELINE_DATA.map(s => s.username))]
+      const clientIds = [...new Set(MOCK_TIMELINE_DATA.map(s => s.client))]
+      setAvailableFilterData({
+        client: clientIds.sort(),
+        username: usernames.sort()
+      })
+    }
+  }, [useMockData, timeRange])
+
+  const applyFilters = useCallback((entries: SessionTimelineEntry[]) => {
+    let filtered = entries
+    
+    // Apply client filter
+    if (selectedFilters.client.length > 0) {
+      filtered = filtered.filter(entry => selectedFilters.client.includes(entry.client))
+    }
+    
+    // Apply username filter
+    if (selectedFilters.username.length > 0) {
+      filtered = filtered.filter(entry => selectedFilters.username.includes(entry.username))
+    }
+    
+    return filtered
+  }, [selectedFilters])
+
+  const updatePaginatedData = useCallback(() => {
+    const filtered = applyFilters(sessionEntries)
+    
+    // Calculate pagination
+    const startIndex = (currentPage - 1) * pageSize
+    const endIndex = startIndex + pageSize
+    const paginatedEntries = filtered.slice(startIndex, endIndex)
+    
+    setFilteredSessionEntries(paginatedEntries)
+    setTotalSessions(filtered.length)
+    setTotalPages(Math.ceil(filtered.length / pageSize))
+  }, [sessionEntries, applyFilters, currentPage, pageSize])
+
   const fetchTimelineData = useCallback(async () => {
     try {
       setLoading(true)
@@ -139,12 +223,35 @@ export default function SessionTimeline({ className, refreshInterval = 60 }: Ses
     }
   }, [timeRange, useMockData, processTimelineData])
 
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage)
+    }
+  }
+
+  const clearAllFilters = () => {
+    setSelectedFilters({
+      client: [],
+      username: []
+    })
+    setCurrentPage(1)
+  }
+
   useEffect(() => {
+    fetchAvailableFilterData()
     fetchTimelineData()
     
     const interval = setInterval(fetchTimelineData, refreshInterval * 1000)
     return () => clearInterval(interval)
-  }, [fetchTimelineData, refreshInterval])
+  }, [fetchTimelineData, fetchAvailableFilterData, refreshInterval])
+
+  useEffect(() => {
+    updatePaginatedData()
+  }, [updatePaginatedData])
+
+  useEffect(() => {
+    setCurrentPage(1) // Reset to first page when filters change
+  }, [selectedFilters])
 
   return (
     <div className={`chart-section ${className || ''}`}>
@@ -191,16 +298,16 @@ export default function SessionTimeline({ className, refreshInterval = 60 }: Ses
           <h3 className="breakdown-title">Connection Activity Over Time</h3>
           <div className="chart-container">
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={timelineData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <Chart data={timelineData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis 
+                <XAxisComponent 
                   dataKey="time" 
                   stroke="#6b7280"
                   fontSize={12}
                   interval="preserveStartEnd"
                 />
-                <YAxis stroke="#6b7280" fontSize={12} />
-                <Tooltip 
+                <YAxisComponent stroke="#6b7280" fontSize={12} />
+                <TooltipComponent 
                   formatter={(value, name) => [value, name]}
                   labelFormatter={(label) => `Time: ${label}`}
                   contentStyle={{
@@ -210,7 +317,7 @@ export default function SessionTimeline({ className, refreshInterval = 60 }: Ses
                     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                   }}
                 />
-                <Area 
+                <AreaComponent 
                   type="monotone" 
                   dataKey="activeConnections" 
                   stackId="1"
@@ -219,7 +326,7 @@ export default function SessionTimeline({ className, refreshInterval = 60 }: Ses
                   fillOpacity={0.6}
                   name="Active Connections"
                 />
-                <Area 
+                <AreaComponent 
                   type="monotone" 
                   dataKey="newConnections" 
                   stackId="2"
@@ -228,7 +335,7 @@ export default function SessionTimeline({ className, refreshInterval = 60 }: Ses
                   fillOpacity={0.6}
                   name="New Connections"
                 />
-                <Area 
+                <AreaComponent 
                   type="monotone" 
                   dataKey="disconnections" 
                   stackId="3"
@@ -237,51 +344,65 @@ export default function SessionTimeline({ className, refreshInterval = 60 }: Ses
                   fillOpacity={0.6}
                   name="Disconnections"
                 />
-              </AreaChart>
+              </Chart>
             </ResponsiveContainer>
           </div>
         </div>
       )}
 
-      {/* Session Details Table */}
-      {!loading && sessionEntries.length > 0 && (
-        <div className="session-details-table">
-          <h3 className="breakdown-title">Recent Sessions</h3>
-          <div className="table-container">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Client</th>
-                  <th>Username</th>
-                  <th>Start Time</th>
-                  <th>End Time</th>
-                  <th>Duration</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sessionEntries.slice(0, 20).map((entry, index) => (
-                  <tr key={index}>
-                    <td>{entry.client}</td>
-                    <td>{entry.username}</td>
-                    <td>{formatTimestamp(entry.start_ts)}</td>
-                    <td>{entry.end_ts ? formatTimestamp(entry.end_ts) : 'Still connected'}</td>
-                    <td>{Math.round(entry.duration)}m</td>
-                    <td>
-                      <span className={`status-badge ${entry.isActive ? 'status-active' : 'status-ended'}`}>
-                        {entry.isActive ? 'Active' : 'Ended'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {/* SearchFilterTable Component for Session Timeline */}
+      <SearchFilterTable
+        title="Session Timeline"
+        data={filteredSessionEntries}
+        totalCount={totalSessions}
+        loading={loading}
+        error={error}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        columns={[
+          { key: 'client', label: 'Client ID' },
+          { key: 'username', label: 'Username' },
+          { 
+            key: 'start_ts', 
+            label: 'Start Time',
+            render: (value) => formatTimestamp(value)
+          },
+          { 
+            key: 'end_ts', 
+            label: 'End Time',
+            render: (value) => value ? formatTimestamp(value) : 'Still connected'
+          },
+          { 
+            key: 'duration', 
+            label: 'Duration',
+            render: (value) => `${Math.round(value)}m`
+          },
+          { 
+            key: 'isActive', 
+            label: 'Status',
+            render: (value) => (
+              <span className={`status-badge ${value ? 'status-active' : 'status-ended'}`}>
+                {value ? 'Active' : 'Ended'}
+              </span>
+            )
+          }
+        ]}
+        filterConfigs={[
+          { key: 'client', label: 'Client IDs', searchable: true, type: 'multiselect' },
+          { key: 'username', label: 'Usernames', searchable: true, type: 'multiselect' }
+        ]}
+        availableFilterData={availableFilterData}
+        selectedFilters={selectedFilters}
+        onFilterChange={setSelectedFilters}
+        onPageChange={handlePageChange}
+        onRefresh={() => fetchTimelineData()}
+        onClearFilters={clearAllFilters}
+        className="session-timeline-section"
+      />
 
       {!loading && sessionEntries.length === 0 && !useMockData && (
-        <div className="no-data">
+        <div className="no-data" style={{ textAlign: 'center', padding: '20px', color: '#6b7280' }}>
           No session data available for the selected time range
         </div>
       )}

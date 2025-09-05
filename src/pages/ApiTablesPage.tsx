@@ -2,24 +2,61 @@ import { useState } from 'react'
 import { ApiTable } from '../components/ApiTable'
 import { API_CONFIGS } from '../types/api'
 
+// Group tables by category for better organization
+const TABLE_CATEGORIES = {
+  'Core Data': ['sessions', 'events', 'clients', 'subscriptions', 'wills', 'broker_metrics'],
+  'Statistics': ['pub_stats', 'sub_stats', 'drop_stats'],
+  'Time Series': ['pub_minute', 'sub_minute', 'drop_minute'],
+  'Live Views': ['v_subscriptions_active', 'v_sessions_open', 'v_client_last_session'],
+  'Analytics': ['v_client_detail', 'v_overview_gre', 'v_client_stats_24h', 'v_topic_detail_24h', 'v_drops_24h', 'v_wills_recent'],
+  '60min Charts': ['v_pub_minute_60m', 'v_sub_minute_60m', 'v_drop_minute_60m']
+}
+
 export const ApiTablesPage = () => {
+  const [activeCategory, setActiveCategory] = useState('Core Data')
   const [activeTab, setActiveTab] = useState('sessions')
+
+  const handleCategoryChange = (category: string) => {
+    setActiveCategory(category)
+    const firstTableInCategory = TABLE_CATEGORIES[category as keyof typeof TABLE_CATEGORIES][0]
+    setActiveTab(firstTableInCategory)
+  }
+
+  const currentCategoryTables = TABLE_CATEGORIES[activeCategory as keyof typeof TABLE_CATEGORIES]
 
   return (
     <div className="api-tables-page">
       <div className="page-header">
         <h1>API Data Tables</h1>
         <p>Browse and analyze all GRE MQTT broker data with pagination and column customization.</p>
+        <p className="table-count">Total: {Object.keys(API_CONFIGS).length} tables available</p>
       </div>
 
+      {/* Category Selector */}
+      <div className="category-tabs">
+        {Object.keys(TABLE_CATEGORIES).map((category) => (
+          <button
+            key={category}
+            onClick={() => handleCategoryChange(category)}
+            className={`category-button ${activeCategory === category ? 'active' : ''}`}
+          >
+            {category}
+            <span className="table-count-badge">
+              {TABLE_CATEGORIES[category as keyof typeof TABLE_CATEGORIES].length}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Table Tabs within Category */}
       <div className="api-tabs">
-        {Object.entries(API_CONFIGS).map(([key, config]) => (
+        {currentCategoryTables.map((key) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
             className={`tab-button ${activeTab === key ? 'active' : ''}`}
           >
-            {config.displayName}
+            {API_CONFIGS[key].displayName}
           </button>
         ))}
       </div>
@@ -53,28 +90,95 @@ const apiTablesPageStyles = `
 .page-header p {
   font-size: 16px;
   color: #6c757d;
-  margin: 0;
+  margin: 4px 0;
 }
 
+.table-count {
+  font-size: 14px;
+  color: #28a745;
+  font-weight: 600;
+}
+
+/* Category Navigation */
+.category-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  flex-wrap: wrap;
+}
+
+.category-button {
+  padding: 10px 16px;
+  background: white;
+  border: 2px solid #e1e5e9;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #495057;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.category-button:hover {
+  border-color: #007bff;
+  background: #f0f8ff;
+  color: #007bff;
+}
+
+.category-button.active {
+  background: #007bff;
+  border-color: #007bff;
+  color: white;
+}
+
+.table-count-badge {
+  background: rgba(0, 0, 0, 0.1);
+  color: inherit;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.category-button.active .table-count-badge {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Table Tabs */
 .api-tabs {
   display: flex;
   gap: 4px;
   margin-bottom: 24px;
   border-bottom: 2px solid #e1e5e9;
   padding-bottom: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.api-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .tab-button {
-  padding: 12px 24px;
+  padding: 12px 20px;
   background: none;
   border: none;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   color: #6c757d;
   cursor: pointer;
   border-radius: 8px 8px 0 0;
   transition: all 0.2s;
   position: relative;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tab-button:hover {
@@ -106,13 +210,22 @@ const apiTablesPageStyles = `
     padding: 16px;
   }
   
-  .api-tabs {
-    flex-wrap: wrap;
+  .category-tabs {
+    padding: 8px;
+  }
+  
+  .category-button {
+    padding: 8px 12px;
+    font-size: 13px;
   }
   
   .tab-button {
     padding: 10px 16px;
-    font-size: 14px;
+    font-size: 13px;
+  }
+  
+  .page-header h1 {
+    font-size: 24px;
   }
 }
 `

@@ -62,7 +62,9 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
           result = await GreApiService.getSubscriptionsPaginated({ offset, limit, filters: filterParams }) as { data: ApiSubscription[], totalCount: number }
           break
         default:
-          throw new Error(`Unknown API type: ${apiType}`)
+          // Use generic method for all new tables
+          result = await GreApiService.getTableDataPaginated(config.endpoint, { offset, limit, filters: filterParams })
+          break
       }
       
       setData(result.data)
@@ -92,7 +94,9 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
           result = await GreApiService.getSubscriptionsPaginated({ offset: 0, limit: 1000 })
           break
         default:
-          return
+          // Use generic method for all new tables
+          result = await GreApiService.getTableDataPaginated(config.endpoint, { offset: 0, limit: 1000 })
+          break
       }
       
       const usernames = [...new Set(

@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer 
+} from 'recharts'
 import { MetricCard } from '../ui/StatCards'
 import { GreApiService, formatDuration } from '../services/greApi'
 import { SessionDuration } from '../config/greApi'
@@ -27,8 +35,8 @@ const MOCK_SESSION_DATA: SessionDuration[] = [
 ]
 
 export default function SessionReliability({ className, refreshInterval = 300 }: SessionReliabilityProps) {
-  const [sessionData, setSessionData] = useState<SessionDuration[]>([])
-  const [histogramData, setHistogramData] = useState<HistogramBin[]>([])
+  const [sessionData, setSessionData] = useState([])
+  const [histogramData, setHistogramData] = useState([])
   const [stats, setStats] = useState({
     median: 0,
     percentile95: 0,
@@ -36,8 +44,8 @@ export default function SessionReliability({ className, refreshInterval = 300 }:
     total: 0
   })
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [error, setError] = useState(null)
+  const [lastUpdated, setLastUpdated] = useState(null)
   const [useMockData, setUseMockData] = useState(false)
 
   const processSessionData = useCallback((sessions: SessionDuration[]) => {
@@ -195,7 +203,11 @@ export default function SessionReliability({ className, refreshInterval = 300 }:
           <h3 className="breakdown-title">Session Duration Distribution</h3>
           <div className="chart-container">
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={histogramData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <BarChart 
+                data={histogramData} 
+                margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
+                barCategoryGap="20%"
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis 
                   dataKey="range" 
@@ -204,8 +216,14 @@ export default function SessionReliability({ className, refreshInterval = 300 }:
                   angle={-45}
                   textAnchor="end"
                   height={80}
+                  interval={0}
                 />
-                <YAxis stroke="#6b7280" fontSize={12} />
+                <YAxis 
+                  stroke="#6b7280" 
+                  fontSize={12}
+                  allowDecimals={false}
+                  domain={[0, 'dataMax']}
+                />
                 <Tooltip 
                   formatter={(value: number, name: string) => [`${value} sessions`, name]}
                   labelFormatter={(label: string) => `Duration: ${label}`}
@@ -220,6 +238,7 @@ export default function SessionReliability({ className, refreshInterval = 300 }:
                   dataKey="count" 
                   fill="#3b82f6"
                   radius={[4, 4, 0, 0]}
+                  maxBarSize={60}
                 />
               </BarChart>
             </ResponsiveContainer>

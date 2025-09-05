@@ -21,7 +21,8 @@ import {
   Event as ApiEvent, 
   Client as ApiClient, 
   Subscription as ApiSubscription,
-  PaginationParams 
+  PaginationParams,
+  ApiDataType 
 } from '../types/api'
 
 const greApi = axios.create({
@@ -113,15 +114,16 @@ export class GreApiService {
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
       const isoDate = sevenDaysAgo.toISOString()
 
+      // Get ALL sessions from last 7 days (both completed and active)
       const response = await greApi.get<Session[]>(
-        `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?start_ts=gte.${isoDate}&end_ts=not.is.null`
+        `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?start_ts=gte.${isoDate}`
       )
 
       return response.data
-        .filter(session => session.start_ts && session.end_ts)
+        .filter(session => session.start_ts) // Must have start time
         .map(session => {
           const start = new Date(session.start_ts!).getTime()
-          const end = new Date(session.end_ts!).getTime()
+          const end = session.end_ts ? new Date(session.end_ts).getTime() : Date.now()
           const durationMinutes = (end - start) / (1000 * 60)
           
           return {
@@ -130,7 +132,7 @@ export class GreApiService {
             username: session.username || 'Unknown'
           }
         })
-        .filter(session => session.duration > 0) // Filter out invalid durations
+        .filter(session => session.duration >= 0) // Include all valid durations including 0
     } catch (error) {
       console.error('Error fetching sessions from last 7 days:', error)
       throw new Error('Failed to fetch session duration data')
@@ -697,6 +699,52 @@ export class GreApiService {
     } catch (error) {
       console.error('Error fetching subscriptions with pagination:', error)
       throw new Error('Failed to fetch subscriptions data')
+    }
+  }
+
+  // Generic method for any table with pagination
+  static async getTableDataPaginated(
+    endpoint: string, 
+    params: PaginationParams = {}
+  ): Promise<{ data: ApiDataType[], totalCount: number }> {
+    try {
+      const { offset = 0, limit = 20, filters = {} } = params
+      
+      const queryParams = new URLSearchParams({
+        offset: offset.toString(),
+        limit: limit.toString()
+      })
+      
+      // Add filter parameters
+      Object.entries(filters).forEach(([key, value]) => {
+        queryParams.append(key, value)
+      })
+      
+      // Try to add default ordering - fallback gracefully if field doesn't exist
+      try {
+        // For views and analytical tables, try different ordering fields
+        if (endpoint.includes('_minute_60m') || endpoint.includes('_minute')) {
+          queryParams.append('order', 'ts_bucket.desc')
+        } else if (endpoint.includes('v_') || endpoint.includes('stats')) {
+          // For views and stats tables, don't add default ordering 
+          // as column availability varies
+        } else {
+          queryParams.append('order', 'id.desc')
+        }
+      } catch (e) {
+        // Ordering failed, continue without it
+      }
+      
+      const response = await greApi.get<ApiDataType[]>(
+        `${endpoint}?${queryParams.toString()}`,
+        { headers: { 'Prefer': 'count=exact' } }
+      )
+      
+      const totalCount = parseInt(response.headers['content-range']?.split('/')[1] || '0')
+      return { data: response.data, totalCount }
+    } catch (error) {
+      console.error(`Error fetching data from ${endpoint}:`, error)
+      throw new Error(`Failed to fetch data from ${endpoint}`)
     }
   }
 }

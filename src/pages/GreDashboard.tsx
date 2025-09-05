@@ -1,7 +1,7 @@
 import React from 'react'
 import ConnectedClients from '../components/ConnectedClients'
 import SessionReliability from '../components/SessionReliability'
-import SessionTimeline from '../components/SessionTimeline'
+import RecentSessions from '../components/RecentSessions'
 import SubscriptionChurn from '../components/SubscriptionChurn'
 import ClientGantt from '../components/ClientGantt'
 import BrokerCheckpoints from '../components/BrokerCheckpoints'
@@ -47,9 +47,10 @@ export default function GreDashboard() {
       {/* Events Analysis Section */}
       <div className="charts-row">
         <ErrorBoundary>
-          <SessionTimeline 
+          <RecentSessions 
             className="chart-half-width"
-            refreshInterval={120}
+            refreshInterval={60}
+            limit={10}
           />
         </ErrorBoundary>
         <ErrorBoundary>
