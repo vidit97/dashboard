@@ -36,19 +36,50 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
   const [error, setError] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [useMockData, setUseMockData] = useState(false)
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(0)
+  const [pageSize] = useState(10)
+  const [totalClients, setTotalClients] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
 
-  const fetchConnectedClients = useCallback(async () => {
+  const fetchConnectedClients = useCallback(async (page = 0, append = false) => {
     try {
-      setLoading(true)
+      if (append) {
+        setLoadingMore(true)
+      } else {
+        setLoading(true)
+        setCurrentPage(0)
+      }
       setError(null)
       
       if (useMockData) {
         // Use mock data
-        setConnectedClients(MOCK_CONNECTED_CLIENTS)
+        if (append) {
+          // For mock data, don't append - just show the same data
+          setHasMore(false)
+        } else {
+          setConnectedClients(MOCK_CONNECTED_CLIENTS)
+          setTotalClients(MOCK_CONNECTED_CLIENTS.length)
+          setHasMore(false)
+        }
       } else {
-        // Try to fetch real data
-        const clients = await GreApiService.getConnectedClients()
-        setConnectedClients(clients)
+        // Fetch real paginated data
+        const offset = page * pageSize
+        const result = await GreApiService.getConnectedClientsPaginated(pageSize, offset)
+        
+        if (append) {
+          // Append new data to existing
+          setConnectedClients(prev => [...prev, ...result.clients])
+        } else {
+          // Replace with fresh data
+          setConnectedClients(result.clients)
+        }
+        
+        setTotalClients(result.total)
+        setHasMore(result.hasMore)
+        setCurrentPage(page)
       }
       
       setLastUpdated(new Date())
@@ -58,14 +89,23 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
       console.error('Error fetching connected clients:', err)
       
       // Fallback to mock data if API fails
-      if (!useMockData) {
+      if (!useMockData && !append) {
         console.log('Falling back to mock data')
         setConnectedClients(MOCK_CONNECTED_CLIENTS)
+        setTotalClients(MOCK_CONNECTED_CLIENTS.length)
+        setHasMore(false)
       }
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
-  }, [useMockData])
+  }, [useMockData, pageSize])
+
+  const loadMore = () => {
+    if (!loadingMore && hasMore) {
+      fetchConnectedClients(currentPage + 1, true)
+    }
+  }
 
   useEffect(() => {
     fetchConnectedClients()
@@ -119,7 +159,7 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
       <div style={{ marginBottom: '24px' }}>
         <MetricCard
           label="Connected Now"
-          value={connectedClients.length.toString()}
+          value={totalClients.toString()}
           loading={loading}
           color="#10b981"
           unit="clients"
@@ -158,7 +198,12 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
       {/* Connected Clients Table */}
       {!loading && connectedClients.length > 0 && (
         <div className="connected-clients-table">
-          <h3 className="breakdown-title">Active Sessions</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 className="breakdown-title">Active Sessions</h3>
+            <div style={{ fontSize: '14px', color: '#6b7280' }}>
+              Showing {connectedClients.length} of {totalClients} sessions
+            </div>
+          </div>
           <div className="table-container">
             <table className="data-table">
               <thead>
@@ -187,6 +232,33 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
               </tbody>
             </table>
           </div>
+          
+          {/* Pagination Controls */}
+          {hasMore && (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              marginTop: '16px', 
+              padding: '16px',
+              borderTop: '1px solid #e5e7eb'
+            }}>
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="button-secondary"
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: loadingMore ? '#f3f4f6' : '#3b82f6',
+                  color: loadingMore ? '#6b7280' : '#ffffff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: loadingMore ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {loadingMore ? 'Loading...' : `Load More (${totalClients - connectedClients.length} remaining)`}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

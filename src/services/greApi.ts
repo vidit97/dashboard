@@ -16,6 +16,13 @@ import {
   TopicSubscription,
   ClientTopicFootprint
 } from '../config/greApi'
+import { 
+  Session as ApiSession, 
+  Event as ApiEvent, 
+  Client as ApiClient, 
+  Subscription as ApiSubscription,
+  PaginationParams 
+} from '../types/api'
 
 const greApi = axios.create({
   baseURL: GRE_API_CONFIG.BASE_URL,
@@ -53,6 +60,49 @@ export class GreApiService {
     } catch (error) {
       console.error('Error fetching connected clients:', error)
       throw new Error('Failed to fetch connected clients')
+    }
+  }
+
+  // Get paginated connected clients with count
+  static async getConnectedClientsPaginated(limit: number = 10, offset: number = 0): Promise<{
+    clients: ConnectedClient[],
+    total: number,
+    hasMore: boolean
+  }> {
+    try {
+      // First get the total count
+      const countResponse = await greApi.get<Session[]>(
+        `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?end_ts=is.null`,
+        {
+          headers: {
+            'Prefer': 'count=exact'
+          }
+        }
+      )
+      
+      // Then get the paginated data
+      const dataResponse = await greApi.get<Session[]>(
+        `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?end_ts=is.null&order=start_ts.desc&limit=${limit}&offset=${offset}`
+      )
+      
+      const clients = dataResponse.data.map(session => ({
+        client: session.client || 'Unknown',
+        username: session.username || 'Unknown',
+        start_ts: session.start_ts || '',
+        session_id: session.id
+      }))
+      
+      const total = countResponse.data.length // Since PostgREST returns the full dataset for count
+      const hasMore = offset + limit < total
+      
+      return {
+        clients,
+        total,
+        hasMore
+      }
+    } catch (error) {
+      console.error('Error fetching paginated connected clients:', error)
+      throw new Error('Failed to fetch paginated connected clients')
     }
   }
 
@@ -535,6 +585,118 @@ export class GreApiService {
     } catch (error) {
       console.error('Error fetching client topic footprints:', error)
       throw new Error('Failed to fetch client topic footprints')
+    }
+  }
+
+  // Generic pagination methods for all APIs
+  static async getSessionsPaginated(params: PaginationParams = {}): Promise<{ data: ApiSession[], totalCount: number }> {
+    try {
+      const { offset = 0, limit = 20, filters = {} } = params
+      
+      // Build query parameters
+      const queryParams = new URLSearchParams({
+        offset: offset.toString(),
+        limit: limit.toString(),
+      })
+      
+      // Add filter parameters
+      Object.entries(filters).forEach(([key, value]) => {
+        queryParams.append(key, value)
+      })
+      
+      const response = await greApi.get<ApiSession[]>(
+        `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?${queryParams.toString()}`,
+        { headers: { 'Prefer': 'count=exact' } }
+      )
+      const totalCount = parseInt(response.headers['content-range']?.split('/')[1] || '0')
+      return { data: response.data, totalCount }
+    } catch (error) {
+      console.error('Error fetching sessions with pagination:', error)
+      throw new Error('Failed to fetch sessions data')
+    }
+  }
+
+  static async getEventsPaginated(params: PaginationParams = {}): Promise<{ data: ApiEvent[], totalCount: number }> {
+    try {
+      const { offset = 0, limit = 20, filters = {} } = params
+      
+      // Build query parameters
+      const queryParams = new URLSearchParams({
+        offset: offset.toString(),
+        limit: limit.toString(),
+        order: 'ts.desc'
+      })
+      
+      // Add filter parameters
+      Object.entries(filters).forEach(([key, value]) => {
+        queryParams.append(key, value)
+      })
+      
+      const response = await greApi.get<ApiEvent[]>(
+        `${GRE_API_CONFIG.ENDPOINTS.EVENTS}?${queryParams.toString()}`,
+        { headers: { 'Prefer': 'count=exact' } }
+      )
+      const totalCount = parseInt(response.headers['content-range']?.split('/')[1] || '0')
+      return { data: response.data, totalCount }
+    } catch (error) {
+      console.error('Error fetching events with pagination:', error)
+      throw new Error('Failed to fetch events data')
+    }
+  }
+
+  static async getClientsPaginated(params: PaginationParams = {}): Promise<{ data: ApiClient[], totalCount: number }> {
+    try {
+      const { offset = 0, limit = 20, filters = {} } = params
+      
+      // Build query parameters
+      const queryParams = new URLSearchParams({
+        offset: offset.toString(),
+        limit: limit.toString(),
+        order: 'last_seen.desc'
+      })
+      
+      // Add filter parameters
+      Object.entries(filters).forEach(([key, value]) => {
+        queryParams.append(key, value)
+      })
+      
+      const response = await greApi.get<ApiClient[]>(
+        `/clients?${queryParams.toString()}`,
+        { headers: { 'Prefer': 'count=exact' } }
+      )
+      const totalCount = parseInt(response.headers['content-range']?.split('/')[1] || '0')
+      return { data: response.data, totalCount }
+    } catch (error) {
+      console.error('Error fetching clients with pagination:', error)
+      throw new Error('Failed to fetch clients data')
+    }
+  }
+
+  static async getSubscriptionsPaginated(params: PaginationParams = {}): Promise<{ data: ApiSubscription[], totalCount: number }> {
+    try {
+      const { offset = 0, limit = 20, filters = {} } = params
+      
+      // Build query parameters
+      const queryParams = new URLSearchParams({
+        offset: offset.toString(),
+        limit: limit.toString(),
+        order: 'created_at.desc'
+      })
+      
+      // Add filter parameters
+      Object.entries(filters).forEach(([key, value]) => {
+        queryParams.append(key, value)
+      })
+      
+      const response = await greApi.get<ApiSubscription[]>(
+        `/subscriptions?${queryParams.toString()}`,
+        { headers: { 'Prefer': 'count=exact' } }
+      )
+      const totalCount = parseInt(response.headers['content-range']?.split('/')[1] || '0')
+      return { data: response.data, totalCount }
+    } catch (error) {
+      console.error('Error fetching subscriptions with pagination:', error)
+      throw new Error('Failed to fetch subscriptions data')
     }
   }
 }

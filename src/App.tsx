@@ -2,6 +2,7 @@ import React from 'react'
 import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import GreDashboard from './pages/GreDashboard'
+import { ApiTablesPage } from './pages/ApiTablesPage'
 
 export default function App() {
   return (
@@ -26,6 +27,12 @@ export default function App() {
               >
                 GRE
               </NavLink>
+              <NavLink 
+                to="/api-tables" 
+                className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
+              >
+                API Tables
+              </NavLink>
             </div>
           </div>
         </nav>
@@ -34,6 +41,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/gre" element={<GreDashboard />} />
+          <Route path="/api-tables" element={<ApiTablesPage />} />
         </Routes>
       </div>
     </Router>
