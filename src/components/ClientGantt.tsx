@@ -50,6 +50,12 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
   const [lastUpdated, setLastUpdated] = useState(null)
   const [useMockData, setUseMockData] = useState(false)
 
+  // Smart filtering state - tracks which clients to show
+  const [selectedClientIds, setSelectedClientIds] = useState([])
+  const [selectedUsernames, setSelectedUsernames] = useState([])
+  const [truncatedUsernames, setTruncatedUsernames] = useState([])
+  const [initialLoad, setInitialLoad] = useState(true)
+
   // Filtering state
   const [filteredGanttData, setFilteredGanttData] = useState([])
   const [selectedFilters, setSelectedFilters] = useState({
@@ -83,10 +89,72 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
       
       if (useMockData) {
         setGanttData(MOCK_GANTT_DATA)
+        // Auto-select first 2 clients from mock data for initial state
+        if (initialLoad) {
+          const mockClientIds = MOCK_GANTT_DATA.map(entry => entry.client)
+          setSelectedClientIds(mockClientIds)
+          setSelectedFilters(prev => ({
+            ...prev,
+            client: mockClientIds
+          }))
+          setInitialLoad(false)
+        }
       } else {
         const hoursBack = timeRange === '24h' ? 24 : 168
-        const data = await GreApiService.getClientGantt(hoursBack)
-        setGanttData(data)
+        
+        if (initialLoad) {
+          // First load: get 5 most recent clients and auto-select them
+          const recentClients = await GreApiService.getRecentClients(hoursBack, 5)
+          setSelectedClientIds(recentClients)
+          setSelectedFilters(prev => ({
+            ...prev,
+            client: recentClients
+          }))
+          
+          // Fetch gantt data for these recent clients
+          const data = await GreApiService.getClientGanttForClients(recentClients, hoursBack)
+          setGanttData(data)
+          setInitialLoad(false)
+        } else {
+          // Subsequent loads: handle both selected clients and usernames
+          let allGanttData: ClientGanttEntry[] = []
+          let allTruncatedUsernames: string[] = []
+          
+          // Get data for selected clients
+          if (selectedClientIds.length > 0) {
+            const clientData = await GreApiService.getClientGanttForClients(selectedClientIds, hoursBack)
+            allGanttData.push(...clientData)
+          }
+          
+          // Get data for selected usernames (with limits)
+          if (selectedUsernames.length > 0) {
+            const { ganttData: usernameData, truncatedUsernames } = await GreApiService.getClientGanttForUsernames(
+              selectedUsernames, 
+              hoursBack, 
+              20 // Max 20 clients per username
+            )
+            allGanttData.push(...usernameData)
+            allTruncatedUsernames = truncatedUsernames
+          }
+          
+          // Remove duplicates (in case a client is selected both directly and via username)
+          const uniqueClients = new Map<string, ClientGanttEntry>()
+          allGanttData.forEach(entry => {
+            if (!uniqueClients.has(entry.client)) {
+              uniqueClients.set(entry.client, entry)
+            }
+          })
+          
+          setGanttData(Array.from(uniqueClients.values()))
+          setTruncatedUsernames(allTruncatedUsernames)
+          
+          // If no selections, fallback to recent clients
+          if (selectedClientIds.length === 0 && selectedUsernames.length === 0) {
+            const recentClients = await GreApiService.getRecentClients(hoursBack, 5)
+            const data = await GreApiService.getClientGanttForClients(recentClients, hoursBack)
+            setGanttData(data)
+          }
+        }
       }
       
       setLastUpdated(new Date())
@@ -102,7 +170,7 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
     } finally {
       setLoading(false)
     }
-  }, [timeRange, useMockData])
+  }, [timeRange, useMockData, selectedClientIds, selectedUsernames, initialLoad])
 
   useEffect(() => {
     fetchGanttData()
@@ -130,20 +198,35 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
     return { left: leftPercent, width: Math.max(0.5, widthPercent) }
   }
 
-  // Filtering functions
-  const fetchAvailableFilterData = useCallback(async () => {
+  // Filtering functions with smart search
+  const fetchAvailableFilterData = useCallback(async (searchTerm: string = '') => {
     try {
-      const clients = [...new Set(ganttData.map(entry => entry.client))].sort()
-      const usernames = [...new Set(ganttData.map(entry => entry.username))].sort()
-      
-      setAvailableFilterData({
-        client: clients,
-        username: usernames
-      })
+      if (useMockData) {
+        const clients = [...new Set(ganttData.map(entry => entry.client))].sort()
+        const usernames = [...new Set(ganttData.map(entry => entry.username))].sort()
+        
+        setAvailableFilterData({
+          client: clients,
+          username: usernames
+        })
+      } else {
+        const hoursBack = timeRange === '24h' ? 24 : 168
+        const { clients, usernames } = await GreApiService.searchClientsAndUsernames(
+          searchTerm, 
+          hoursBack, 
+          200 // Get more results for better search experience
+        )
+        
+        setAvailableFilterData({
+          client: clients,
+          username: usernames
+        })
+      }
     } catch (err) {
       console.error('Error fetching filter data:', err)
+      // Keep existing data on error
     }
-  }, [ganttData])
+  }, [ganttData, useMockData, timeRange])
 
   const applyFilters = useCallback((data: ClientGanttEntry[]) => {
     let filtered = data
@@ -187,30 +270,104 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
     }
   }
 
-  const clearAllFilters = () => {
+  const clearAllFilters = async () => {
     setSelectedFilters({
       client: [],
       username: []
     })
     setCurrentPage(1)
+    
+    // Reset to initial 5 recent clients
+    setSelectedClientIds([])
+    setSelectedUsernames([])
+    setTruncatedUsernames([])
+    
+    if (!useMockData) {
+      try {
+        setLoading(true)
+        const hoursBack = timeRange === '24h' ? 24 : 168
+        const recentClients = await GreApiService.getRecentClients(hoursBack, 5)
+        setSelectedClientIds(recentClients)
+        setSelectedFilters(prev => ({
+          ...prev,
+          client: recentClients
+        }))
+        
+        const data = await GreApiService.getClientGanttForClients(recentClients, hoursBack)
+        setGanttData(data)
+      } catch (err) {
+        console.error('Error resetting to recent clients:', err)
+      } finally {
+        setLoading(false)
+      }
+    } else {
+      // For mock data, reset to all mock clients
+      const mockClientIds = MOCK_GANTT_DATA.map(entry => entry.client)
+      setSelectedClientIds(mockClientIds)
+      setSelectedFilters(prev => ({
+        ...prev,
+        client: mockClientIds
+      }))
+    }
   }
 
   // Search functionality handlers
   const handleSearchChange = (filterKey: string, value: string) => {
     setSearchInputs(prev => ({ ...prev, [filterKey]: value }))
+    
+    // Debounced search for better performance
+    setTimeout(() => {
+      fetchAvailableFilterData(value)
+    }, 300)
   }
 
   const handleToggleDropdown = (filterKey: string, show: boolean) => {
     setShowDropdowns(prev => ({ ...prev, [filterKey]: show }))
   }
 
-  const handleSelectValue = (filterKey: string, value: string) => {
+  const handleSelectValue = async (filterKey: string, value: string) => {
     const currentValues = selectedFilters[filterKey] || []
     if (!currentValues.includes(value)) {
+      const newValues = [...currentValues, value]
       setSelectedFilters(prev => ({
         ...prev,
-        [filterKey]: [...currentValues, value]
+        [filterKey]: newValues
       }))
+      
+      // If adding a client, update selectedClientIds and fetch new data
+      if (filterKey === 'client') {
+        const newClientIds = [...selectedClientIds, value]
+        setSelectedClientIds(newClientIds)
+        
+        // Fetch gantt data for the new client and merge with existing
+        if (!useMockData) {
+          try {
+            const hoursBack = timeRange === '24h' ? 24 : 168
+            const newClientData = await GreApiService.getClientGanttForClients([value], hoursBack)
+            
+            // Merge with existing data
+            setGanttData(prev => {
+              const existingClients = new Set(prev.map(entry => entry.client))
+              const filteredNewData = newClientData.filter(entry => !existingClients.has(entry.client))
+              return [...prev, ...filteredNewData]
+            })
+          } catch (err) {
+            console.error('Error fetching data for new client:', err)
+          }
+        }
+      }
+      
+      // If adding a username, update selectedUsernames and trigger data fetch
+      if (filterKey === 'username') {
+        const newUsernames = [...selectedUsernames, value]
+        setSelectedUsernames(newUsernames)
+        
+        // Trigger fetchGanttData to reload with the new username
+        // The fetchGanttData function will handle the smart username fetching
+        setTimeout(() => {
+          fetchGanttData()
+        }, 100)
+      }
     }
     // Clear search and close dropdown
     setSearchInputs(prev => ({ ...prev, [filterKey]: '' }))
@@ -219,10 +376,31 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
 
   const handleRemoveValue = (filterKey: string, value: string) => {
     const currentValues = selectedFilters[filterKey] || []
+    const newValues = currentValues.filter(v => v !== value)
     setSelectedFilters(prev => ({
       ...prev,
-      [filterKey]: currentValues.filter(v => v !== value)
+      [filterKey]: newValues
     }))
+    
+    // If removing a client, update selectedClientIds and remove from gantt data
+    if (filterKey === 'client') {
+      const newClientIds = selectedClientIds.filter(id => id !== value)
+      setSelectedClientIds(newClientIds)
+      
+      // Remove client from gantt data
+      setGanttData(prev => prev.filter(entry => entry.client !== value))
+    }
+    
+    // If removing a username, update selectedUsernames and trigger data fetch
+    if (filterKey === 'username') {
+      const newUsernames = selectedUsernames.filter(id => id !== value)
+      setSelectedUsernames(newUsernames)
+      
+      // Trigger fetchGanttData to reload without the removed username
+      setTimeout(() => {
+        fetchGanttData()
+      }, 100)
+    }
   }
 
   // Close dropdowns when clicking outside
@@ -238,8 +416,11 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
   }, [])
 
   useEffect(() => {
-    fetchAvailableFilterData()
-  }, [fetchAvailableFilterData])
+    // Only fetch available filter data after initial gantt data is loaded
+    if (!initialLoad) {
+      fetchAvailableFilterData()
+    }
+  }, [fetchAvailableFilterData, initialLoad])
 
   useEffect(() => {
     updatePaginatedData()
@@ -248,6 +429,15 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
   useEffect(() => {
     setCurrentPage(1) // Reset to first page when filters change
   }, [selectedFilters])
+
+  // Reset initial load when time range changes
+  useEffect(() => {
+    setInitialLoad(true)
+    setSelectedClientIds([])
+    setSelectedUsernames([])
+    setTruncatedUsernames([])
+    setGanttData([])
+  }, [timeRange])
 
   return (
     <div className={`chart-section ${className || ''}`}>
@@ -285,6 +475,14 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
           >
             Use Mock Data
           </button>
+        </div>
+      )}
+      
+      {truncatedUsernames.length > 0 && (
+        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg mb-6">
+          <p className="text-yellow-800">
+            <strong>Note:</strong> Some usernames have been limited to 20 clients each to improve performance: {truncatedUsernames.join(', ')}
+          </p>
         </div>
       )}
 

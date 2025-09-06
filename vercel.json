@@ -18,7 +18,7 @@
   ],
   "env": {
     "VITE_API_BASE_URL": "https://c0dca5c6aa0c.ngrok-free.app",
-    "VITE_GRE_API_BASE_URL": "https://gzip-lucia-stores-davidson.trycloudflare.com",
+    "VITE_GRE_API_BASE_URL": "https://motivation-raised-body-installing.trycloudflare.com",
     "VITE_DEFAULT_BROKER": "local"
   }
 }

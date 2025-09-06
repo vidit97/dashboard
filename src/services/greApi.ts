@@ -477,6 +477,147 @@ export class GreApiService {
     }
   }
 
+  // Get most recent N clients for initial display
+  static async getRecentClients(hoursBack: number = 24, limit: number = 5): Promise<string[]> {
+    try {
+      const fromTime = new Date(Date.now() - (hoursBack * 60 * 60 * 1000)).toISOString()
+      
+      const response = await greApi.get<Session[]>(
+        `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?start_ts=gte.${fromTime}&select=client&order=start_ts.desc&limit=${limit}`
+      )
+      
+      // Get unique clients from most recent sessions
+      const uniqueClients = [...new Set(response.data.map(s => s.client).filter(Boolean))] as string[]
+      return uniqueClients.slice(0, limit)
+    } catch (error) {
+      console.error('Error fetching recent clients:', error)
+      throw new Error('Failed to fetch recent clients')
+    }
+  }
+
+  // Get gantt data for specific clients only (optimized)
+  static async getClientGanttForClients(clientIds: string[], hoursBack: number = 24): Promise<ClientGanttEntry[]> {
+    try {
+      if (clientIds.length === 0) return []
+      
+      const fromTime = new Date(Date.now() - (hoursBack * 60 * 60 * 1000)).toISOString()
+      const clientFilter = clientIds.map(id => `"${id}"`).join(',')
+      
+      const response = await greApi.get<Session[]>(
+        `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?start_ts=gte.${fromTime}&client=in.(${clientFilter})&order=start_ts.desc`
+      )
+
+      // Group sessions by client
+      const clientMap = new Map<string, ClientGanttEntry>()
+      
+      response.data.forEach(session => {
+        const client = session.client || 'Unknown'
+        const username = session.username || 'Unknown'
+        
+        if (!clientMap.has(client)) {
+          clientMap.set(client, {
+            client,
+            username,
+            sessions: []
+          })
+        }
+        
+        const duration = session.end_ts 
+          ? (new Date(session.end_ts).getTime() - new Date(session.start_ts || '').getTime()) / 1000 / 60
+          : 0
+        
+        clientMap.get(client)!.sessions.push({
+          start: session.start_ts || '',
+          end: session.end_ts,
+          duration,
+          isActive: !session.end_ts
+        })
+      })
+
+      return Array.from(clientMap.values())
+    } catch (error) {
+      console.error('Error fetching gantt data for specific clients:', error)
+      throw new Error('Failed to fetch gantt data for specific clients')
+    }
+  }
+
+  // Get gantt data for specific usernames (with smart client limits)
+  static async getClientGanttForUsernames(usernames: string[], hoursBack: number = 24, maxClientsPerUsername: number = 20): Promise<{
+    ganttData: ClientGanttEntry[],
+    truncatedUsernames: string[]
+  }> {
+    try {
+      if (usernames.length === 0) return { ganttData: [], truncatedUsernames: [] }
+      
+      const fromTime = new Date(Date.now() - (hoursBack * 60 * 60 * 1000)).toISOString()
+      const allGanttData: ClientGanttEntry[] = []
+      const truncatedUsernames: string[] = []
+      
+      // Process each username separately to control client limits
+      for (const username of usernames) {
+        // Get clients for this username with limit
+        const clientsResponse = await greApi.get<Session[]>(
+          `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?start_ts=gte.${fromTime}&username=eq.${username}&select=client&order=start_ts.desc&limit=${maxClientsPerUsername * 2}`
+        )
+        
+        // Get unique clients
+        const uniqueClients = [...new Set(clientsResponse.data.map(s => s.client).filter(Boolean))] as string[]
+        
+        // Check if we're truncating
+        if (uniqueClients.length > maxClientsPerUsername) {
+          truncatedUsernames.push(username)
+          uniqueClients.splice(maxClientsPerUsername) // Keep only first maxClientsPerUsername
+        }
+        
+        // Get gantt data for these clients
+        if (uniqueClients.length > 0) {
+          const usernameGanttData = await this.getClientGanttForClients(uniqueClients, hoursBack)
+          allGanttData.push(...usernameGanttData)
+        }
+      }
+      
+      return {
+        ganttData: allGanttData,
+        truncatedUsernames
+      }
+    } catch (error) {
+      console.error('Error fetching gantt data for usernames:', error)
+      throw new Error('Failed to fetch gantt data for usernames')
+    }
+  }
+
+  // Search all available clients and usernames for dropdown (with smart pagination)
+  static async searchClientsAndUsernames(
+    searchTerm: string = '', 
+    hoursBack: number = 24,
+    limit: number = 100
+  ): Promise<{ clients: string[], usernames: string[] }> {
+    try {
+      const fromTime = new Date(Date.now() - (hoursBack * 60 * 60 * 1000)).toISOString()
+      
+      let query = `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?start_ts=gte.${fromTime}&select=client,username&order=start_ts.desc&limit=${limit}`
+      
+      // Add search filter if provided
+      if (searchTerm) {
+        query += `&or=(client.ilike.*${searchTerm}*,username.ilike.*${searchTerm}*)`
+      }
+      
+      const response = await greApi.get<Session[]>(query)
+      
+      const clients = [...new Set(response.data.map(s => s.client).filter(Boolean))] as string[]
+      const usernames = [...new Set(response.data.map(s => s.username).filter(Boolean))] as string[]
+      
+      return {
+        clients: clients.sort(),
+        usernames: usernames.sort()
+      }
+    } catch (error) {
+      console.error('Error searching clients and usernames:', error)
+      // Fallback to empty results on error
+      return { clients: [], usernames: [] }
+    }
+  }
+
   // Get checkpoint events
   static async getCheckpointEvents(hoursBack: number = 24): Promise<CheckpointEvent[]> {
     try {
