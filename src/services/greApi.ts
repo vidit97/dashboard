@@ -251,16 +251,22 @@ export class GreApiService {
     return this.getEventCountByAction('disconnected', hoursBack)
   }
 
-  // Get subscription events for churn analysis
+  // Get subscription events for churn analysis - optimized for large datasets
   static async getSubscriptionEvents(hoursBack: number = 24): Promise<Event[]> {
     try {
       const fromDate = new Date()
       fromDate.setHours(fromDate.getHours() - hoursBack)
       const isoDate = fromDate.toISOString()
 
+      console.log(`Fetching subscription events since: ${isoDate}`)
+
+      // Optimized query: only get fields we need, filter by action and time
       const response = await greApi.get<Event[]>(
-        `${GRE_API_CONFIG.ENDPOINTS.EVENTS}?action=in.(subscribe,unsubscribe)&ts=gte.${isoDate}&order=ts.asc`
+        `${GRE_API_CONFIG.ENDPOINTS.EVENTS}?select=ts,action,client,topic&action=in.(subscribe,unsubscribe)&ts=gte.${isoDate}&order=ts.asc`
       )
+      
+      console.log(`Fetched ${response.data.length} subscription events`)
+      
       return response.data
     } catch (error) {
       console.error('Error fetching subscription events:', error)

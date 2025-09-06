@@ -17,8 +17,8 @@
     }
   ],
   "env": {
-    "VITE_API_BASE_URL": "https://c0dca5c6aa0c.ngrok-free.app",
-    "VITE_GRE_API_BASE_URL": "https://motivation-raised-body-installing.trycloudflare.com",
+    "VITE_API_BASE_URL": "https://78e8ca98575f.ngrok-free.app",
+    "VITE_GRE_API_BASE_URL": "https://daddy-set-motivated-k.trycloudflare.com",
     "VITE_DEFAULT_BROKER": "local"
   }
 }

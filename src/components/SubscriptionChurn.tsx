@@ -16,22 +16,14 @@ interface ChurnData {
   netChange: number
 }
 
-// Mock data for fallback
-const MOCK_CHURN_DATA: ChurnData[] = [
-  { timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), time: '10:00', subscribes: 5, unsubscribes: 2, netChange: 3 },
-  { timestamp: new Date(Date.now() - 1.5 * 60 * 60 * 1000).toISOString(), time: '10:30', subscribes: 3, unsubscribes: 1, netChange: 2 },
-  { timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(), time: '11:00', subscribes: 8, unsubscribes: 4, netChange: 4 },
-  { timestamp: new Date(Date.now() - 0.5 * 60 * 60 * 1000).toISOString(), time: '11:30', subscribes: 2, unsubscribes: 6, netChange: -4 },
-  { timestamp: new Date().toISOString(), time: '12:00', subscribes: 6, unsubscribes: 3, netChange: 3 }
-]
+// Mock data removed per user request
 
 export default function SubscriptionChurn({ className, refreshInterval = 120 }: SubscriptionChurnProps) {
-  const [churnData, setChurnData] = useState(MOCK_CHURN_DATA)
+  const [churnData, setChurnData] = useState<ChurnData[]>([])
   const [timeRange, setTimeRange] = useState('24h')
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [lastUpdated, setLastUpdated] = useState(null)
-  const [useMockData, setUseMockData] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   const processChurnData = useCallback((events: SubscriptionEvent[]) => {
     // Group events by 5-minute buckets and aggregate
@@ -78,29 +70,20 @@ export default function SubscriptionChurn({ className, refreshInterval = 120 }: 
       setLoading(true)
       setError(null)
       
-      if (useMockData) {
-        setChurnData(MOCK_CHURN_DATA)
-      } else {
-        const hoursBack = timeRange === '24h' ? 24 : 168
-        const events = await GreApiService.getSubscriptionChurn(hoursBack)
-        const processed = processChurnData(events)
-        setChurnData(processed)
-      }
+      const hoursBack = timeRange === '24h' ? 24 : 168
+      const events = await GreApiService.getSubscriptionChurn(hoursBack)
+      const processed = processChurnData(events)
+      setChurnData(processed)
       
       setLastUpdated(new Date())
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to fetch subscription churn data'
       setError(errorMsg)
       console.error('Error fetching churn data:', err)
-      
-      if (!useMockData) {
-        console.log('Falling back to mock data')
-        setChurnData(MOCK_CHURN_DATA)
-      }
     } finally {
       setLoading(false)
     }
-  }, [timeRange, useMockData, processChurnData])
+  }, [timeRange, processChurnData])
 
   useEffect(() => {
     fetchChurnData()
@@ -129,26 +112,12 @@ export default function SubscriptionChurn({ className, refreshInterval = 120 }: 
           <button onClick={fetchChurnData} disabled={loading} className="button-secondary">
             {loading ? 'Loading...' : 'Refresh'}
           </button>
-          <label className="mock-data-toggle">
-            <input
-              type="checkbox"
-              checked={useMockData}
-              onChange={(e) => setUseMockData(e.target.checked)}
-            />
-            Use Mock Data
-          </label>
         </div>
       </div>
 
-      {error && !useMockData && (
+      {error && (
         <div className="error-message">
           Error: {error}
-          <button 
-            onClick={() => setUseMockData(true)}
-            style={{ marginLeft: '8px', fontSize: '12px', padding: '4px 8px' }}
-          >
-            Use Mock Data
-          </button>
         </div>
       )}
 
@@ -223,7 +192,7 @@ export default function SubscriptionChurn({ className, refreshInterval = 120 }: 
         </div>
       )}
 
-      {!loading && churnData.length === 0 && !useMockData && (
+      {!loading && churnData.length === 0 && (
         <div className="no-data">
           No subscription activity data available for the selected time range
         </div>
@@ -232,7 +201,6 @@ export default function SubscriptionChurn({ className, refreshInterval = 120 }: 
       {lastUpdated && (
         <div className="last-updated">
           Last updated: {lastUpdated.toLocaleString()}
-          {useMockData && <span style={{ color: '#f59e0b' }}> (Using Mock Data)</span>}
         </div>
       )}
     </div>
