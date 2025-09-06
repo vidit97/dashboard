@@ -29,6 +29,7 @@ interface SearchFilterTableProps {
   onRefresh: () => void
   onClearFilters: () => void
   className?: string
+  showApplyButton?: boolean
 }
 
 interface FilterDropdownProps {
@@ -205,6 +206,7 @@ export const SearchFilterTable = ({
   onPageChange,
   onRefresh,
   onClearFilters,
+  showApplyButton = true,
   className
 }) => {
   const [searchInputs, setSearchInputs] = useState({})
@@ -255,85 +257,89 @@ export const SearchFilterTable = ({
 
   return (
     <div className={`search-filter-table ${className || ''}`}>
-      {/* Filter Controls */}
-      <div className="filter-controls" style={{ 
-        marginBottom: '20px', 
-        padding: '16px', 
-        backgroundColor: '#f9fafb', 
-        border: '1px solid #e5e7eb', 
-        borderRadius: '8px' 
-      }}>
-        <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#374151' }}>
-            Filter {title}
-          </h4>
-          {hasActiveFilters && (
-            <span style={{ fontSize: '12px', color: '#6b7280' }}>
-              {totalSelectedCount} filter{totalSelectedCount !== 1 ? 's' : ''} active
-            </span>
-          )}
-        </div>
-        
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
-          gap: '16px' 
+      {/* Filter Controls: only show when there are filters, active selections, or the apply button is enabled */}
+      {((filterConfigs && filterConfigs.length > 0) || hasActiveFilters || showApplyButton) && (
+        <div className="filter-controls" style={{ 
+          marginBottom: '20px', 
+          padding: '16px', 
+          backgroundColor: '#f9fafb', 
+          border: '1px solid #e5e7eb', 
+          borderRadius: '8px' 
         }}>
-          {filterConfigs.map((config) => (
-            <div key={config.key}>
-              <FilterDropdown
-                config={config}
-                availableValues={availableFilterData[config.key] || []}
-                selectedValues={selectedFilters[config.key] || []}
-                searchInput={searchInputs[config.key] || ''}
-                showDropdown={showDropdowns[config.key] || false}
-                onSearchChange={(value) => handleSearchChange(config.key, value)}
-                onToggleDropdown={(show) => handleToggleDropdown(config.key, show)}
-                onSelectValue={(value) => handleSelectValue(config.key, value)}
-                onRemoveValue={(value) => handleRemoveValue(config.key, value)}
-              />
-            </div>
-          ))}
-        </div>
-
-        <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
-          <button
-            onClick={onRefresh}
-            disabled={loading}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#3b82f6',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '14px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.6 : 1
-            }}
-          >
-            {loading ? 'Loading...' : 'Apply Filters'}
-          </button>
+          <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#374151' }}>
+              Filter {title}
+            </h4>
+            {hasActiveFilters && (
+              <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                {totalSelectedCount} filter{totalSelectedCount !== 1 ? 's' : ''} active
+              </span>
+            )}
+          </div>
           
-          {hasActiveFilters && (
-            <button
-              onClick={onClearFilters}
-              disabled={loading}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: '#6b7280',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '14px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.6 : 1
-              }}
-            >
-              Clear All
-            </button>
-          )}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+            gap: '16px' 
+          }}>
+            {filterConfigs.map((config) => (
+              <div key={config.key}>
+                <FilterDropdown
+                  config={config}
+                  availableValues={availableFilterData[config.key] || []}
+                  selectedValues={selectedFilters[config.key] || []}
+                  searchInput={searchInputs[config.key] || ''}
+                  showDropdown={showDropdowns[config.key] || false}
+                  onSearchChange={(value) => handleSearchChange(config.key, value)}
+                  onToggleDropdown={(show) => handleToggleDropdown(config.key, show)}
+                  onSelectValue={(value) => handleSelectValue(config.key, value)}
+                  onRemoveValue={(value) => handleRemoveValue(config.key, value)}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
+            {showApplyButton && (
+              <button
+                onClick={onRefresh}
+                disabled={loading}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#3b82f6',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.6 : 1
+                }}
+              >
+                {loading ? 'Loading...' : 'Apply Filters'}
+              </button>
+            )}
+
+            {hasActiveFilters && (
+              <button
+                onClick={onClearFilters}
+                disabled={loading}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#6b7280',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.6 : 1
+                }}
+              >
+                Clear All
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {error && (
         <div style={{ 

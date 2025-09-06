@@ -205,6 +205,49 @@ export class GreApiService {
     }
   }
 
+  // Robust count helpers that use PostgREST Prefer: count=exact and read Content-Range header
+  // These avoid pulling large result sets when only counts are needed.
+  static async getEventCountByAction(action: string, hoursBack: number = 24): Promise<number> {
+    try {
+      const fromDate = new Date()
+      fromDate.setHours(fromDate.getHours() - hoursBack)
+      const isoDate = fromDate.toISOString()
+
+      // Request a minimal page but ask server for exact count
+      const url = `${GRE_API_CONFIG.ENDPOINTS.EVENTS}?action=eq.${action}&ts=gte.${isoDate}&limit=1`
+      const response = await greApi.get<Event[]>(url, {
+        headers: {
+          'Prefer': 'count=exact'
+        }
+      })
+
+      // Try Content-Range header first (format 0-0/12345)
+      const contentRange = (response.headers && (response.headers['content-range'] || response.headers['Content-Range'])) as string | undefined
+      if (contentRange) {
+        const parts = contentRange.split('/').map(p => p.trim())
+        if (parts.length === 2) {
+          const totalNum = parseInt(parts[1], 10)
+          if (!isNaN(totalNum)) return totalNum
+        }
+      }
+
+      // Fallback: some PostgREST setups return full array when count header isn't present
+      return Array.isArray(response.data) ? response.data.length : 0
+    } catch (error) {
+      console.error('Error fetching event count for', action, error)
+      throw new Error('Failed to fetch event count')
+    }
+  }
+
+  // Convenience wrappers for connects/disconnects
+  static async getConnectCount(hoursBack: number = 24): Promise<number> {
+    return this.getEventCountByAction('connected', hoursBack)
+  }
+
+  static async getDisconnectCount(hoursBack: number = 24): Promise<number> {
+    return this.getEventCountByAction('disconnected', hoursBack)
+  }
+
   // Get subscription events for churn analysis
   static async getSubscriptionEvents(hoursBack: number = 24): Promise<Event[]> {
     try {

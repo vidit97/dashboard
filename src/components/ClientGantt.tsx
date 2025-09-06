@@ -103,18 +103,55 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
         const hoursBack = timeRange === '24h' ? 24 : 168
         
         if (initialLoad) {
-          // First load: get 5 most recent clients and auto-select them
-          const recentClients = await GreApiService.getRecentClients(hoursBack, 5)
-          setSelectedClientIds(recentClients)
-          setSelectedFilters(prev => ({
-            ...prev,
-            client: recentClients
-          }))
-          
-          // Fetch gantt data for these recent clients
-          const data = await GreApiService.getClientGanttForClients(recentClients, hoursBack)
-          setGanttData(data)
-          setInitialLoad(false)
+          // First load: prefer username 'greAgent' if available, else pick one recent username
+          try {
+            const { usernames } = await GreApiService.searchClientsAndUsernames('', hoursBack, 200)
+            const initialUsername = (usernames && usernames.includes('greAgent'))
+              ? 'greAgent'
+              : (usernames && usernames.length > 0 ? usernames[0] : null)
+
+            if (initialUsername) {
+              setSelectedUsernames([initialUsername])
+              setSelectedFilters(prev => ({
+                ...prev,
+                username: [initialUsername]
+              }))
+
+              // Fetch gantt data for that username
+              const { ganttData: usernameData, truncatedUsernames } = await GreApiService.getClientGanttForUsernames(
+                [initialUsername],
+                hoursBack,
+                20
+              )
+              setGanttData(usernameData)
+              setTruncatedUsernames(truncatedUsernames || [])
+            } else {
+              // Fallback: get 5 most recent clients and auto-select them
+              const recentClients = await GreApiService.getRecentClients(hoursBack, 5)
+              setSelectedClientIds(recentClients)
+              setSelectedFilters(prev => ({
+                ...prev,
+                client: recentClients
+              }))
+
+              // Fetch gantt data for these recent clients
+              const data = await GreApiService.getClientGanttForClients(recentClients, hoursBack)
+              setGanttData(data)
+            }
+
+            setInitialLoad(false)
+          } catch (err) {
+            // If any error, fallback to recent clients like before
+            const recentClients = await GreApiService.getRecentClients(hoursBack, 5)
+            setSelectedClientIds(recentClients)
+            setSelectedFilters(prev => ({
+              ...prev,
+              client: recentClients
+            }))
+            const data = await GreApiService.getClientGanttForClients(recentClients, hoursBack)
+            setGanttData(data)
+            setInitialLoad(false)
+          }
         } else {
           // Subsequent loads: handle both selected clients and usernames
           let allGanttData: ClientGanttEntry[] = []
@@ -338,40 +375,26 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
       if (filterKey === 'client') {
         const newClientIds = [...selectedClientIds, value]
         setSelectedClientIds(newClientIds)
-        
-        // Fetch gantt data for the new client and merge with existing
-        if (!useMockData) {
-          try {
-            const hoursBack = timeRange === '24h' ? 24 : 168
-            const newClientData = await GreApiService.getClientGanttForClients([value], hoursBack)
-            
-            // Merge with existing data
-            setGanttData(prev => {
-              const existingClients = new Set(prev.map(entry => entry.client))
-              const filteredNewData = newClientData.filter(entry => !existingClients.has(entry.client))
-              return [...prev, ...filteredNewData]
-            })
-          } catch (err) {
-            console.error('Error fetching data for new client:', err)
-          }
-        }
+        // Note: do not auto-fetch here. User will click "Apply Filters" to load data.
       }
       
       // If adding a username, update selectedUsernames and trigger data fetch
       if (filterKey === 'username') {
         const newUsernames = [...selectedUsernames, value]
         setSelectedUsernames(newUsernames)
-        
-        // Trigger fetchGanttData to reload with the new username
-        // The fetchGanttData function will handle the smart username fetching
-        setTimeout(() => {
-          fetchGanttData()
-        }, 100)
+        // Note: do not auto-fetch here. User will click "Apply Filters" to load data.
       }
     }
     // Clear search and close dropdown
     setSearchInputs(prev => ({ ...prev, [filterKey]: '' }))
     setShowDropdowns(prev => ({ ...prev, [filterKey]: false }))
+  }
+
+  const applySelectedFilters = async () => {
+    // Reset initialLoad so fetchGanttData respects selected filters
+    setInitialLoad(false)
+    // Fetch data based on the currently selected client ids / usernames
+    await fetchGanttData()
   }
 
   const handleRemoveValue = (filterKey: string, value: string) => {
@@ -754,6 +777,26 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
             )}
           </div>
         </div>
+        
+        {/* Apply Filters button placed next to filter groups */}
+        <div style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button
+            onClick={applySelectedFilters}
+            style={{
+              padding: '8px 12px',
+              backgroundColor: '#3b82f6',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '14px',
+              cursor: 'pointer',
+              fontWeight: 600
+            }}
+            disabled={loading}
+          >
+            {loading ? 'Loading...' : 'Apply Filters'}
+          </button>
+        </div>
 
         <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
           <button
@@ -888,7 +931,8 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
         onFilterChange={() => {}}
         onPageChange={handlePageChange}
         onRefresh={fetchGanttData}
-        onClearFilters={() => {}}
+  onClearFilters={() => {}}
+  showApplyButton={false}
         className=""
       />
     </div>
