@@ -75,7 +75,7 @@ export const ActiveSubscriptions = ({ className }: ActiveSubscriptionsProps) => 
 
   if (loading) {
     return (
-      <div className={`bg-white rounded-lg shadow p-6 ${className}`}>
+      <div className={`chart-section ${className}`}>
         <div className="animate-pulse">
           <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
           <div className="h-48 bg-gray-200 rounded"></div>
@@ -85,8 +85,8 @@ export const ActiveSubscriptions = ({ className }: ActiveSubscriptionsProps) => 
   }
 
   return (
-    <div className={`bg-white rounded-lg shadow p-6 ${className}`}>
-      <div className="flex justify-between items-center mb-4">
+    <div className={`chart-section ${className}`}>
+      <div className="chart-header">
         <h3 className="text-lg font-semibold text-gray-900">Active Subscriptions</h3>
         <div className="flex items-center gap-4">
           <select

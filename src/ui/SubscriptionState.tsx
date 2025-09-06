@@ -138,7 +138,7 @@ export const SubscriptionState = ({ className }: SubscriptionStateProps) => {
 
   if (loading) {
     return (
-      <div className={`bg-white rounded-lg shadow p-6 ${className}`}>
+      <div className={`chart-section ${className}`}>
         <div className="animate-pulse">
           <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
           <div className="h-48 bg-gray-200 rounded"></div>
@@ -148,8 +148,8 @@ export const SubscriptionState = ({ className }: SubscriptionStateProps) => {
   }
 
   return (
-    <div className={`bg-white rounded-lg shadow p-6 ${className}`}>
-      <div className="flex justify-between items-center mb-4">
+    <div className={`chart-section ${className}`}>
+      <div className="chart-header">
         <h3 className="text-lg font-semibold text-gray-900">Subscription State</h3>
         <div className="flex items-center gap-4">
           <select
@@ -242,7 +242,7 @@ export const SubscriptionState = ({ className }: SubscriptionStateProps) => {
           availableFilterData={{ ...availableFilterData }}
           selectedFilters={selectedFilters}
           onFilterChange={(filters) => { setSelectedFilters(filters); setPage(0) }}
-          onPageChange={(newPage) => { setPage(Math.max(0, newPage - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+          onPageChange={(newPage) => { setPage(Math.max(0, newPage - 1)) }}
           onRefresh={() => fetchData()}
           onClearFilters={() => { setSelectedFilters({ client: [] }); setPage(0); fetchData() }}
           className="subscriptions-table"

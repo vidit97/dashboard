@@ -10,7 +10,6 @@ import RecentActivity from '../components/RecentActivity'
 import RecentConnectDisconnects from '../components/RecentConnectDisconnects'
 import { ActiveSubscriptions } from '../ui/ActiveSubscriptions'
 import { SubscriptionState } from '../ui/SubscriptionState'
-import { ClientTopicFootprintChart } from '../ui/ClientTopicFootprint'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { ApiTester } from '../components/ApiTester'
 
@@ -119,15 +118,6 @@ export default function GreDashboard() {
         <ErrorBoundary>
           <SubscriptionState 
             className="chart-half-width"
-          />
-        </ErrorBoundary>
-      </div>
-
-      {/* Client Topic Footprint Section */}
-      <div className="charts-row">
-        <ErrorBoundary>
-          <ClientTopicFootprintChart 
-            className="chart-full-width"
           />
         </ErrorBoundary>
       </div>
