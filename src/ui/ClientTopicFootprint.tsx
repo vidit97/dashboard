@@ -17,7 +17,7 @@ export const ClientTopicFootprintChart = ({ className, clientId }: ClientTopicFo
   const [clientTopics, setClientTopics] = useState<ClientTopic[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedClient, setSelectedClient] = useState(clientId || 'auto-00BDE9A5-F3A6-8B05-6A76-72A207C1DE3F')
+  const [selectedClient, setSelectedClient] = useState(clientId || 'auto-1D04687D-950A-A897-CE91-58A608CFC0CD')
   const [availableClients, setAvailableClients] = useState<string[]>([])
 
   const fetchClientData = async (client: string) => {
@@ -102,8 +102,14 @@ export const ClientTopicFootprintChart = ({ className, clientId }: ClientTopicFo
     const color = qosColors[qos as keyof typeof qosColors] || '#6b7280'
     return (
       <span 
-        className="px-2 py-1 text-xs font-medium rounded-full text-white"
-        style={{ backgroundColor: color }}
+        style={{ 
+          backgroundColor: color,
+          color: 'white',
+          padding: '2px 8px',
+          borderRadius: '12px',
+          fontSize: '11px',
+          fontWeight: '500'
+        }}
       >
         QoS {qos}
       </span>
@@ -118,12 +124,15 @@ export const ClientTopicFootprintChart = ({ className, clientId }: ClientTopicFo
     }
   }
 
-  // Calculate bubble size based on client count (better scaling for rows)
+  // Calculate bubble size based on client count - reasonable sizes
   const maxClients = Math.max(...clientTopics.map(t => t.total_clients_on_topic), 1)
   const getBubbleSize = (clientCount: number) => {
-    // Scale from 60px to 120px based on popularity
-    const scale = Math.sqrt(clientCount / maxClients) // Use square root for better visual scaling
-    return `${60 + scale * 60}px` // 60px to 120px
+    // Scale from 60px to 120px for reasonable bubble sizes
+    const scale = Math.sqrt(clientCount / maxClients)
+    const baseSize = 60
+    const maxSize = 120
+    const size = baseSize + (scale * (maxSize - baseSize))
+    return `${Math.max(size, baseSize)}px`
   }
 
   if (loading) {
@@ -140,12 +149,12 @@ export const ClientTopicFootprintChart = ({ className, clientId }: ClientTopicFo
   return (
     <div className={`chart-section ${className}`}>
       <div className="chart-header">
-        <h3 className="text-lg font-semibold text-gray-900">Per-Client Topic Footprint</h3>
-        <div className="flex items-center gap-3">
+        <h2 className="chart-title">Per-Client Topic Footprint</h2>
+        <div className="chart-controls">
           <select
             value={selectedClient}
             onChange={(e) => setSelectedClient(e.target.value)}
-            className="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="select"
           >
             {availableClients.map((client) => (
               <option key={client} value={client}>
@@ -155,139 +164,188 @@ export const ClientTopicFootprintChart = ({ className, clientId }: ClientTopicFo
           </select>
           <button
             onClick={() => fetchClientData(selectedClient)}
-            className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+            className="button button-primary"
           >
             Refresh
           </button>
         </div>
       </div>
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
-            {error}
-          </div>
-        )}
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-blue-50 rounded-lg border border-blue-200 p-4 text-center">
-            <div className="text-2xl font-bold text-blue-700">{clientTopics.length}</div>
-            <div className="text-sm text-blue-600">Active Subscriptions</div>
-          </div>
-          <div className="bg-green-50 rounded-lg border border-green-200 p-4 text-center">
-            <div className="text-2xl font-bold text-green-700">
-              {clientTopics.reduce((sum, t) => sum + t.total_clients_on_topic, 0)}
-            </div>
-            <div className="text-sm text-green-600">Total Subscribers</div>
-          </div>
-          <div className="bg-purple-50 rounded-lg border border-purple-200 p-4 text-center">
-            <div className="text-2xl font-bold text-purple-700">
-              {Math.max(...clientTopics.map(t => t.total_clients_on_topic), 0)}
-            </div>
-            <div className="text-sm text-purple-600">Max Topic Popularity</div>
-          </div>
+      {error && (
+        <div className="error-message">
+          {error}
         </div>
+      )}
 
-        {/* Topic Bubbles */}
-        <div className="mb-8">
-          <h4 className="text-lg font-semibold text-gray-800 mb-4 border-b-2 border-blue-200 pb-3">
-            Topic Distribution
-          </h4>
-          <div className="text-sm text-gray-600 mb-6 bg-blue-50 p-3 rounded-lg border border-blue-200">
-            <strong>Bubble row: one bubble per topic (size = #active clients on that topic; highlight this client).</strong>
+      {/* Stats Cards */}
+      <div className="overview-cards">
+        <div className="metric-card">
+          <div className="metric-value">{clientTopics.length}</div>
+          <div className="metric-label">Active Subscriptions</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-value">
+            {clientTopics.reduce((sum, t) => sum + t.total_clients_on_topic, 0)}
           </div>
-          
-          {clientTopics.length === 0 ? (
-            <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-              <div className="text-lg font-medium mb-2">No active subscriptions found</div>
-              <div className="text-sm">This client is not subscribed to any topics</div>
-            </div>
-          ) : (
-            <div className="space-y-6">
+          <div className="metric-label">Total Subscribers</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-value">
+            {Math.max(...clientTopics.map(t => t.total_clients_on_topic), 0)}
+          </div>
+          <div className="metric-label">Max Topic Popularity</div>
+        </div>
+      </div>
+
+      {/* Bubble Chart */}
+      <div style={{ marginTop: '24px' }}>
+        <h3 className="breakdown-title">Topic Distribution - Bubble Visualization</h3>
+        <div style={{ 
+          background: '#f8fafc', 
+          padding: '16px', 
+          borderRadius: '8px', 
+          marginBottom: '20px',
+          border: '1px solid #e5e7eb',
+          fontSize: '14px',
+          color: '#374151'
+        }}>
+          <strong>Bubble row: one bubble per topic (size = #active clients on that topic; highlight this client)</strong>
+          <br />
+          <span style={{ fontSize: '12px', color: '#6b7280' }}>
+            Each bubble represents a topic this client subscribes to. Bubble size indicates total clients on that topic.
+          </span>
+        </div>
+        
+        {clientTopics.length === 0 ? (
+          <div className="chart-placeholder">
+            No active subscriptions found for this client
+          </div>
+        ) : (
+          <div className="chart-container">
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '20px',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: '40px 20px',
+              minHeight: '300px'
+            }}>
               {clientTopics.map((topic) => {
                 const bubbleSize = getBubbleSize(topic.total_clients_on_topic)
+                const sizeValue = parseInt(bubbleSize.replace('px', ''))
+                
                 return (
-                  <div key={topic.topic} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-                    {/* Topic Label */}
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-gray-900 truncate" title={topic.topic}>
-                        {topic.topic}
+                  <div 
+                    key={topic.topic}
+                    style={{
+                      textAlign: 'center',
+                      margin: '10px'
+                    }}
+                  >
+                    {/* Bubble */}
+                    <div
+                      style={{
+                        width: bubbleSize,
+                        height: bubbleSize,
+                        borderRadius: '50%',
+                        background: '#3b82f6',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                        fontWeight: 'bold',
+                        fontSize: sizeValue > 80 ? '16px' : '14px',
+                        cursor: 'pointer',
+                        transition: 'transform 0.2s ease',
+                        position: 'relative',
+                        border: '3px solid #fbbf24',
+                        boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'scale(1.1)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'scale(1)'
+                      }}
+                      title={`${topic.topic}: ${topic.total_clients_on_topic} clients`}
+                    >
+                      <div style={{ textAlign: 'center' }}>
+                        <div>{topic.total_clients_on_topic}</div>
+                        <div style={{ fontSize: '10px', opacity: 0.9 }}>
+                          CLIENT{topic.total_clients_on_topic !== 1 ? 'S' : ''}
+                        </div>
                       </div>
-                      <div className="text-sm text-gray-500">
-                        QoS: {getQosBadge(topic.qos)} • Last updated: {formatDateTime(topic.updated_at)}
+                      
+                      {/* Star indicator */}
+                      <div style={{
+                        position: 'absolute',
+                        top: '-8px',
+                        right: '-8px',
+                        width: '24px',
+                        height: '24px',
+                        background: '#fbbf24',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '12px',
+                        border: '2px solid white'
+                      }}>
+                        ⭐
                       </div>
                     </div>
                     
-                    {/* Bubble */}
-                    <div className="flex items-center justify-center">
-                      <div
-                        className="rounded-full bg-blue-500 border-4 border-blue-700 flex items-center justify-center text-white font-bold shadow-lg hover:scale-110 transition-transform cursor-pointer"
-                        style={{
-                          width: bubbleSize,
-                          height: bubbleSize,
-                          minWidth: '60px',
-                          minHeight: '60px'
-                        }}
-                        title={`${topic.total_clients_on_topic} total clients on topic: ${topic.topic}`}
-                      >
-                        <div className="text-center">
-                          <div className="text-xs leading-tight">
-                            {topic.total_clients_on_topic}
-                          </div>
-                          <div className="text-xs leading-tight opacity-80">
-                            clients
-                          </div>
-                        </div>
-                      </div>
+                    {/* Topic label */}
+                    <div style={{ 
+                      marginTop: '8px',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      color: '#374151',
+                      maxWidth: bubbleSize,
+                      wordBreak: 'break-word'
+                    }}>
+                      {topic.topic}
+                    </div>
+                    
+                    {/* QoS badge */}
+                    <div style={{ marginTop: '4px' }}>
+                      {getQosBadge(topic.qos)}
                     </div>
                   </div>
                 )
               })}
             </div>
-          )}
-        </div>
-
-        {/* Details Table */}
-        {clientTopics.length > 0 && (
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
-            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-              <h4 className="text-md font-medium text-gray-700">
-                Subscription Details for {selectedClient}
-              </h4>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Topic</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">QoS</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Clients</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Updated</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {clientTopics.map((topic, index) => (
-                    <tr key={topic.topic} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                        {topic.topic}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {getQosBadge(topic.qos)}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                          {topic.total_clients_on_topic} client{topic.total_clients_on_topic !== 1 ? 's' : ''}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500">
-                        {formatDateTime(topic.updated_at)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </div>
         )}
+      </div>
+
+      {/* Details Table */}
+      {clientTopics.length > 0 && (
+        <div style={{ marginTop: '24px' }}>
+          <h3 className="breakdown-title">Subscription Details for {selectedClient}</h3>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Topic</th>
+                <th>QoS</th>
+                <th>Total Clients</th>
+                <th>Last Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clientTopics.map((topic, index) => (
+                <tr key={topic.topic}>
+                  <td>{topic.topic}</td>
+                  <td>{getQosBadge(topic.qos)}</td>
+                  <td>{topic.total_clients_on_topic}</td>
+                  <td>{formatDateTime(topic.updated_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
