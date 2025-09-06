@@ -68,30 +68,76 @@ export default function SessionReliability({ className, refreshInterval = 300 }:
       total: durations.length
     })
 
-    // Create histogram bins - ensure we have valid data
+    // Create smart histogram bins based on actual data distribution
     const maxDuration = Math.max(...durations)
     const minDuration = Math.min(...durations)
-    const binCount = Math.min(10, Math.max(3, Math.ceil(Math.sqrt(durations.length))))
-    const binSize = Math.max(1, Math.ceil((maxDuration - minDuration) / binCount))
     
-    const bins: HistogramBin[] = []
-    for (let i = 0; i < binCount; i++) {
-      const binMin = minDuration + (i * binSize)
-      const binMax = minDuration + ((i + 1) * binSize)
-      const count = durations.filter(d => 
-        i === binCount - 1 ? d >= binMin : d >= binMin && d < binMax
-      ).length
+    console.log(`Duration range: ${minDuration.toFixed(2)} - ${maxDuration.toFixed(2)} minutes`)
+    
+    let bins: HistogramBin[] = []
+    
+    // For very short sessions (most MQTT sessions), use second-based bins
+    if (maxDuration < 1) {
+      // Use seconds for bins when all durations are under 1 minute
+      const ranges = [
+        { min: 0, max: 0.0167, label: '0-1s' },      // 0-1 second
+        { min: 0.0167, max: 0.0833, label: '1-5s' }, // 1-5 seconds
+        { min: 0.0833, max: 0.25, label: '5-15s' },  // 5-15 seconds
+        { min: 0.25, max: 0.5, label: '15-30s' },    // 15-30 seconds
+        { min: 0.5, max: 1, label: '30s-1m' }        // 30s-1min
+      ]
       
-      if (count > 0 || bins.length === 0) { // Always include at least one bin
-        bins.push({
-          range: i === binCount - 1 && maxDuration > binMax
-            ? `${formatDuration(binMin)}+` 
-            : `${formatDuration(binMin)}-${formatDuration(binMax)}`,
+      bins = ranges.map(range => {
+        const count = durations.filter(d => d >= range.min && d < range.max).length
+        return {
+          range: range.label,
           count,
-          minDuration: binMin,
-          maxDuration: binMax
-        })
-      }
+          minDuration: range.min,
+          maxDuration: range.max
+        }
+      }).filter(bin => bin.count > 0)
+      
+    } else if (maxDuration < 60) {
+      // Use minute-based bins for sessions under 1 hour
+      const ranges = [
+        { min: 0, max: 0.25, label: '0-15s' },
+        { min: 0.25, max: 1, label: '15s-1m' },
+        { min: 1, max: 5, label: '1-5m' },
+        { min: 5, max: 15, label: '5-15m' },
+        { min: 15, max: 30, label: '15-30m' },
+        { min: 30, max: 60, label: '30m-1h' }
+      ]
+      
+      bins = ranges.map(range => {
+        const count = durations.filter(d => d >= range.min && d < range.max).length
+        return {
+          range: range.label,
+          count,
+          minDuration: range.min,
+          maxDuration: range.max
+        }
+      }).filter(bin => bin.count > 0)
+      
+    } else {
+      // Use hour-based bins for longer sessions
+      const ranges = [
+        { min: 0, max: 1, label: '0-1m' },
+        { min: 1, max: 15, label: '1-15m' },
+        { min: 15, max: 60, label: '15m-1h' },
+        { min: 60, max: 240, label: '1-4h' },
+        { min: 240, max: 720, label: '4-12h' },
+        { min: 720, max: Infinity, label: '12h+' }
+      ]
+      
+      bins = ranges.map(range => {
+        const count = durations.filter(d => d >= range.min && (range.max === Infinity ? true : d < range.max)).length
+        return {
+          range: range.label,
+          count,
+          minDuration: range.min,
+          maxDuration: range.max === Infinity ? maxDuration : range.max
+        }
+      }).filter(bin => bin.count > 0)
     }
     
     setHistogramData(bins)

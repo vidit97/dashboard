@@ -107,17 +107,21 @@ export class GreApiService {
     }
   }
 
-  // Get sessions from last 7 days with durations
+  // Get sessions from last 7 days with durations - ALL data efficiently
   static async getSessionsLast7Days(): Promise<SessionDuration[]> {
     try {
       const sevenDaysAgo = new Date()
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
       const isoDate = sevenDaysAgo.toISOString()
 
-      // Get ALL sessions from last 7 days (both completed and active)
+      console.log(`Fetching all sessions since: ${isoDate}`)
+
+      // Get ALL sessions from last 7 days - only select the fields we need for performance
       const response = await greApi.get<Session[]>(
-        `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?start_ts=gte.${isoDate}`
+        `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?select=start_ts,end_ts,client,username&start_ts=gte.${isoDate}&order=start_ts.desc`
       )
+
+      console.log(`Fetched ${response.data.length} sessions for analysis`)
 
       return response.data
         .filter(session => session.start_ts) // Must have start time
@@ -132,7 +136,6 @@ export class GreApiService {
             username: session.username || 'Unknown'
           }
         })
-        .filter(session => session.duration >= 0) // Include all valid durations including 0
     } catch (error) {
       console.error('Error fetching sessions from last 7 days:', error)
       throw new Error('Failed to fetch session duration data')
