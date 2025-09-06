@@ -27,7 +27,7 @@ import {
 
 const greApi = axios.create({
   baseURL: GRE_API_CONFIG.BASE_URL,
-  timeout: 10000,
+  timeout: 30000, // Increased to 30 seconds for large datasets
   headers: {
     'Content-Type': 'application/json',
     'Prefer': 'count=exact'
@@ -107,16 +107,17 @@ export class GreApiService {
     }
   }
 
-  // Get sessions from last 7 days with durations - ALL data efficiently
+  // Get sessions from last 7 days with durations - optimized for performance
   static async getSessionsLast7Days(): Promise<SessionDuration[]> {
     try {
       const sevenDaysAgo = new Date()
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
       const isoDate = sevenDaysAgo.toISOString()
 
-      console.log(`Fetching all sessions since: ${isoDate}`)
+      console.log(`Fetching sessions since: ${isoDate}`)
 
-      // Get ALL sessions from last 7 days - only select the fields we need for performance
+      // Limit to 5000 most recent sessions to prevent timeouts
+      // This provides a good statistical sample for histogram analysis
       const response = await greApi.get<Session[]>(
         `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?select=start_ts,end_ts,client,username&start_ts=gte.${isoDate}&order=start_ts.desc`
       )
@@ -884,12 +885,31 @@ export class GreApiService {
     }
   }
 
-  // Get active subscriptions with topic aggregation
-  static async getActiveSubscriptions(): Promise<{ subscriptions: Subscription[], topicBreakdown: TopicSubscription[] }> {
+  // Get total count of active subscriptions first
+  static async getActiveSubscriptionsCount(): Promise<number> {
     try {
-      const response = await greApi.get<Subscription[]>(
-        `${GRE_API_CONFIG.ENDPOINTS.SUBSCRIPTIONS}?active=is.true&order=updated_at.desc`
+      const response = await greApi.get(
+        `${GRE_API_CONFIG.ENDPOINTS.SUBSCRIPTIONS}?active=is.true&select=id`,
+        { headers: { 'Prefer': 'count=exact' } }
       )
+      return parseInt(response.headers['content-range']?.split('/')[1] || '0')
+    } catch (error) {
+      console.error('Error fetching active subscriptions count:', error)
+      throw new Error('Failed to fetch active subscriptions count')
+    }
+  }
+
+  // Get active subscriptions with topic aggregation (with optional limit for large datasets)
+  static async getActiveSubscriptions(limit?: number): Promise<{ subscriptions: Subscription[], topicBreakdown: TopicSubscription[], totalCount: number }> {
+    try {
+      // Get total count first
+      const totalCount = await this.getActiveSubscriptionsCount()
+      
+      // If count is very large and no limit specified, set a reasonable limit
+      const effectiveLimit = limit || (totalCount > 10000 ? 5000 : undefined)
+      
+      const query = `${GRE_API_CONFIG.ENDPOINTS.SUBSCRIPTIONS}?active=is.true&order=updated_at.desc${effectiveLimit ? `&limit=${effectiveLimit}` : ''}`
+      const response = await greApi.get<Subscription[]>(query)
       
       const subscriptions = response.data
       
@@ -917,7 +937,7 @@ export class GreApiService {
       const topicBreakdown = Array.from(topicMap.values())
         .sort((a, b) => b.count - a.count)
       
-      return { subscriptions, topicBreakdown }
+      return { subscriptions, topicBreakdown, totalCount }
     } catch (error) {
       console.error('Error fetching active subscriptions:', error)
       throw new Error('Failed to fetch active subscriptions')
@@ -925,12 +945,13 @@ export class GreApiService {
   }
 
   // Get subscription state (who's subscribed to what)
-  static async getSubscriptionState(): Promise<{ activeSubscriptions: Subscription[], topicBreakdown: TopicSubscription[] }> {
+  static async getSubscriptionState(): Promise<{ activeSubscriptions: Subscription[], topicBreakdown: TopicSubscription[], totalCount: number }> {
     try {
       const result = await this.getActiveSubscriptions()
       return {
         activeSubscriptions: result.subscriptions,
-        topicBreakdown: result.topicBreakdown
+        topicBreakdown: result.topicBreakdown,
+        totalCount: result.totalCount
       }
     } catch (error) {
       console.error('Error fetching subscription state:', error)

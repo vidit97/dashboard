@@ -904,23 +904,23 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
           { key: 'client', label: 'Client ID' },
           { key: 'username', label: 'Username' },
           { 
-            key: 'sessions', 
+            key: 'sessions_count', 
             label: 'Sessions',
-            render: (sessions) => `${sessions.length} session${sessions.length !== 1 ? 's' : ''}`
+            render: (value, row) => `${row.sessions.length} session${row.sessions.length !== 1 ? 's' : ''}`
           },
           { 
-            key: 'sessions', 
+            key: 'sessions_active', 
             label: 'Active Sessions',
-            render: (sessions) => {
-              const activeSessions = sessions.filter(s => s.isActive)
+            render: (value, row) => {
+              const activeSessions = row.sessions.filter(s => s.isActive)
               return `${activeSessions.length} active`
             }
           },
           { 
-            key: 'sessions', 
+            key: 'sessions_duration', 
             label: 'Total Duration',
-            render: (sessions) => {
-              const totalDuration = sessions.reduce((sum, session) => sum + (session.duration || 0), 0)
+            render: (value, row) => {
+              const totalDuration = row.sessions.reduce((sum, session) => sum + (session.duration || 0), 0)
               return formatDuration(totalDuration)
             }
           }

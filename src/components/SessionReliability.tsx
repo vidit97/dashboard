@@ -24,19 +24,11 @@ interface HistogramBin {
   maxDuration: number
 }
 
-// Mock data for fallback
-const MOCK_SESSION_DATA: SessionDuration[] = [
-  { duration: 5, client: 'client-1', username: 'testUser' },
-  { duration: 15, client: 'client-2', username: 'testUser' },
-  { duration: 25, client: 'client-3', username: 'greAgent' },
-  { duration: 45, client: 'client-4', username: 'greAgent' },
-  { duration: 60, client: 'client-5', username: 'testUser' },
-  { duration: 120, client: 'client-6', username: 'greAgent' },
-]
+// Mock data removed - using real API data only
 
-export default function SessionReliability({ className, refreshInterval = 300 }: SessionReliabilityProps) {
-  const [sessionData, setSessionData] = useState([])
-  const [histogramData, setHistogramData] = useState([])
+export default function SessionReliability({ className, refreshInterval = 180 }: SessionReliabilityProps) {
+  const [sessionData, setSessionData] = useState<SessionDuration[]>([])
+  const [histogramData, setHistogramData] = useState<HistogramBin[]>([])
   const [stats, setStats] = useState({
     median: 0,
     percentile95: 0,
@@ -44,9 +36,8 @@ export default function SessionReliability({ className, refreshInterval = 300 }:
     total: 0
   })
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [lastUpdated, setLastUpdated] = useState(null)
-  const [useMockData, setUseMockData] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   const processSessionData = useCallback((sessions: SessionDuration[]) => {
     if (sessions.length === 0) {
@@ -148,33 +139,20 @@ export default function SessionReliability({ className, refreshInterval = 300 }:
       setLoading(true)
       setError(null)
       
-      if (useMockData) {
-        // Use mock data
-        setSessionData(MOCK_SESSION_DATA)
-        processSessionData(MOCK_SESSION_DATA)
-      } else {
-        // Try to fetch real data
-        const sessions = await GreApiService.getSessionsLast7Days()
-        setSessionData(sessions)
-        processSessionData(sessions)
-      }
-      
+      console.log('Fetching session data from API...')
+      const sessions = await GreApiService.getSessionsLast7Days()
+      console.log(`Fetched ${sessions.length} sessions`)
+      setSessionData(sessions)
+      processSessionData(sessions)
       setLastUpdated(new Date())
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to fetch session data'
       setError(errorMsg)
       console.error('Error fetching session data:', err)
-      
-      // Fallback to mock data if API fails
-      if (!useMockData) {
-        console.log('Falling back to mock data')
-        setSessionData(MOCK_SESSION_DATA)
-        processSessionData(MOCK_SESSION_DATA)
-      }
     } finally {
       setLoading(false)
     }
-  }, [useMockData, processSessionData])
+  }, [processSessionData])
 
   useEffect(() => {
     fetchSessionData()
@@ -191,26 +169,12 @@ export default function SessionReliability({ className, refreshInterval = 300 }:
           <button onClick={fetchSessionData} disabled={loading} className="button-secondary">
             {loading ? 'Loading...' : 'Refresh'}
           </button>
-          <label className="mock-data-toggle">
-            <input
-              type="checkbox"
-              checked={useMockData}
-              onChange={(e) => setUseMockData(e.target.checked)}
-            />
-            Use Mock Data
-          </label>
         </div>
       </div>
 
-      {error && !useMockData && (
+      {error && (
         <div className="error-message">
           Error: {error}
-          <button 
-            onClick={() => setUseMockData(true)}
-            style={{ marginLeft: '8px', fontSize: '12px', padding: '4px 8px' }}
-          >
-            Use Mock Data
-          </button>
         </div>
       )}
 
@@ -292,7 +256,7 @@ export default function SessionReliability({ className, refreshInterval = 300 }:
         </div>
       )}
 
-      {!loading && sessionData.length === 0 && !useMockData && (
+      {!loading && sessionData.length === 0 && (
         <div className="no-data">
           No session data available for the last 7 days
         </div>
@@ -301,7 +265,11 @@ export default function SessionReliability({ className, refreshInterval = 300 }:
       {lastUpdated && (
         <div className="last-updated">
           Last updated: {lastUpdated.toLocaleString()}
-          {useMockData && <span style={{ color: '#f59e0b' }}> (Using Mock Data)</span>}
+          {sessionData.length > 0 && (
+            <span style={{ color: '#10b981', marginLeft: '8px' }}>
+              • {sessionData.length} sessions analyzed
+            </span>
+          )}
         </div>
       )}
     </div>
