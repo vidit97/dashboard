@@ -171,6 +171,40 @@ export class GreApiService {
     }
   }
 
+  // Get connect events only
+  static async getConnectEvents(hoursBack: number = 24): Promise<Event[]> {
+    try {
+      const fromDate = new Date()
+      fromDate.setHours(fromDate.getHours() - hoursBack)
+      const isoDate = fromDate.toISOString()
+
+      const response = await greApi.get<Event[]>(
+        `${GRE_API_CONFIG.ENDPOINTS.EVENTS}?action=in.(connected)&ts=gte.${isoDate}&order=ts.desc`
+      )
+      return response.data
+    } catch (error) {
+      console.error('Error fetching connect events:', error)
+      throw new Error('Failed to fetch connect events')
+    }
+  }
+
+  // Get disconnect events only
+  static async getDisconnectEvents(hoursBack: number = 24): Promise<Event[]> {
+    try {
+      const fromDate = new Date()
+      fromDate.setHours(fromDate.getHours() - hoursBack)
+      const isoDate = fromDate.toISOString()
+
+      const response = await greApi.get<Event[]>(
+        `${GRE_API_CONFIG.ENDPOINTS.EVENTS}?action=in.(disconnected)&ts=gte.${isoDate}&order=ts.desc`
+      )
+      return response.data
+    } catch (error) {
+      console.error('Error fetching disconnect events:', error)
+      throw new Error('Failed to fetch disconnect events')
+    }
+  }
+
   // Get subscription events for churn analysis
   static async getSubscriptionEvents(hoursBack: number = 24): Promise<Event[]> {
     try {
@@ -285,6 +319,93 @@ export class GreApiService {
     } catch (error) {
       console.error('Error processing subscription churn:', error)
       throw new Error('Failed to process subscription churn data')
+    }
+  }
+
+  // Process connection/disconnection events aggregated by time buckets
+  static async getConnectionChurn(hoursBack: number = 24, bucketSizeMinutes: number = 5): Promise<SubscriptionEvent[]> {
+    try {
+      // Get sessions data to derive connection/disconnection events
+      const sessions = await this.getAllSessions()
+      
+      // Filter sessions to the time range
+      const cutoffTime = new Date(Date.now() - hoursBack * 60 * 60 * 1000)
+      const recentSessions = sessions.filter(session => {
+        const startTime = session.start_ts ? new Date(session.start_ts) : null
+        const endTime = session.end_ts ? new Date(session.end_ts) : null
+        
+        return (startTime && startTime >= cutoffTime) || 
+               (endTime && endTime >= cutoffTime)
+      })
+      
+      // Group events by time buckets
+      const buckets = new Map<string, { connects: number, disconnects: number }>()
+      
+      recentSessions.forEach(session => {
+        // Process connection event (start_ts)
+        if (session.start_ts) {
+          const startTime = new Date(session.start_ts)
+          if (startTime >= cutoffTime) {
+            const bucketTime = new Date(
+              startTime.getFullYear(),
+              startTime.getMonth(),
+              startTime.getDate(),
+              startTime.getHours(),
+              Math.floor(startTime.getMinutes() / bucketSizeMinutes) * bucketSizeMinutes
+            )
+            
+            const bucketKey = bucketTime.toISOString()
+            if (!buckets.has(bucketKey)) {
+              buckets.set(bucketKey, { connects: 0, disconnects: 0 })
+            }
+            buckets.get(bucketKey)!.connects++
+          }
+        }
+        
+        // Process disconnection event (end_ts)
+        if (session.end_ts) {
+          const endTime = new Date(session.end_ts)
+          if (endTime >= cutoffTime) {
+            const bucketTime = new Date(
+              endTime.getFullYear(),
+              endTime.getMonth(),
+              endTime.getDate(),
+              endTime.getHours(),
+              Math.floor(endTime.getMinutes() / bucketSizeMinutes) * bucketSizeMinutes
+            )
+            
+            const bucketKey = bucketTime.toISOString()
+            if (!buckets.has(bucketKey)) {
+              buckets.set(bucketKey, { connects: 0, disconnects: 0 })
+            }
+            buckets.get(bucketKey)!.disconnects++
+          }
+        }
+      })
+
+      // Convert to array format compatible with SubscriptionEvent
+      const result: SubscriptionEvent[] = []
+      buckets.forEach((counts, timestamp) => {
+        result.push({
+          ts: timestamp,
+          action: 'subscribe', // Reuse for connects 
+          client: '',
+          topic: '',
+          count: counts.connects
+        })
+        result.push({
+          ts: timestamp,
+          action: 'unsubscribe', // Reuse for disconnects
+          client: '',
+          topic: '',
+          count: counts.disconnects
+        })
+      })
+
+      return result.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
+    } catch (error) {
+      console.error('Error processing connection churn:', error)
+      throw new Error('Failed to process connection churn data')
     }
   }
 

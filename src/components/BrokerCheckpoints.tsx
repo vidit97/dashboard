@@ -73,12 +73,9 @@ export default function BrokerCheckpoints({ className, refreshInterval = 300 }: 
   }, [fetchCheckpoints, refreshInterval])
 
   return (
-    <div className={`chart-section ${className || ''}`}>
+    <div className={`chart-section ${className || ''}`} style={{ minHeight: 'auto' }}>
       <div className="chart-header">
-        <h2 className="chart-title">
-          💾 Broker Checkpoints 
-          <span className="checkpoint-count">({checkpoints.length})</span>
-        </h2>
+        <h2 className="chart-title">💾 Broker Checkpoints</h2>
         <div className="chart-controls">
           <select 
             className="select"
@@ -114,56 +111,91 @@ export default function BrokerCheckpoints({ className, refreshInterval = 300 }: 
         </div>
       )}
 
-      {/* Checkpoint Summary */}
-      <div className="checkpoint-summary">
-        <div className="checkpoint-stats">
-          <div className="stat-item">
-            <span className="stat-label">Total Checkpoints:</span>
-            <span className="stat-value">{checkpoints.length}</span>
+      {/* Compact Summary */}
+      <div className="checkpoint-compact-summary">
+        <div className="compact-stats">
+          <div className="compact-stat">
+            <div className="stat-label">Total Checkpoints:</div>
+            <div className="stat-value">{checkpoints.length}</div>
           </div>
           {checkpoints.length > 0 && (
-            <div className="stat-item">
-              <span className="stat-label">Last Checkpoint:</span>
-              <span className="stat-value">{formatTimestamp(checkpoints[0]?.ts)}</span>
+            <div className="compact-stat">
+              <div className="stat-label">Last Checkpoint:</div>
+              <div className="stat-value">{formatTimestamp(checkpoints[0]?.ts)}</div>
             </div>
           )}
         </div>
+
+        {/* Enhanced Timeline Markers */}
+        {!loading && checkpoints.length > 0 && (
+          <div className="checkpoint-enhanced-timeline">
+            <div className="timeline-label">Recent Activity:</div>
+            <div className="enhanced-markers">
+              {checkpoints.slice(0, 12).map((checkpoint, index) => (
+                <div
+                  key={checkpoint.id}
+                  className="enhanced-marker"
+                  title={`${formatTimestamp(checkpoint.ts)}: ${checkpoint.raw || 'Checkpoint saved'}`}
+                  style={{
+                    left: `${(index / Math.min(11, checkpoints.length - 1)) * 100}%`,
+                    animationDelay: `${index * 0.1}s`
+                  }}
+                >
+                  💾
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Timeline Markers */}
+      {/* Checkpoint Data Table */}
       {!loading && checkpoints.length > 0 && (
-        <div className="checkpoint-timeline">
-          <h3 className="breakdown-title">Checkpoint Timeline</h3>
-          <div className="timeline-container">
-            {checkpoints.slice(0, 10).map((checkpoint, index) => (
-              <div key={checkpoint.id} className="checkpoint-marker">
-                <div className="marker-dot">💾</div>
-                <div className="marker-details">
-                  <div className="marker-time">{formatTimestamp(checkpoint.ts)}</div>
-                  <div className="marker-description">
-                    {checkpoint.raw || 'Database checkpoint saved'}
-                  </div>
-                </div>
-              </div>
-            ))}
+        <div className="checkpoint-table-container">
+          <h3 className="breakdown-title">Checkpoint Details</h3>
+          <div className="data-table-container" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Action</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {checkpoints.slice(0, 20).map((checkpoint) => (
+                  <tr key={checkpoint.id}>
+                    <td style={{ fontSize: '12px', color: '#6b7280' }}>
+                      {formatTimestamp(checkpoint.ts)}
+                    </td>
+                    <td>
+                      <span className="checkpoint-action">💾 Checkpoint</span>
+                    </td>
+                    <td style={{ fontSize: '14px', color: '#374151' }}>
+                      {checkpoint.raw || 'Database checkpoint saved'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
           
-          {checkpoints.length > 10 && (
-            <div className="timeline-overflow">
-              <span>... and {checkpoints.length - 10} more checkpoints</span>
+          {checkpoints.length > 20 && (
+            <div className="table-overflow">
+              <span>Showing latest 20 of {checkpoints.length} total checkpoints</span>
             </div>
           )}
         </div>
       )}
 
       {!loading && checkpoints.length === 0 && !useMockData && (
-        <div className="no-data">
+        <div className="no-data-compact">
           No checkpoint events found for the selected time range
         </div>
       )}
 
       {lastUpdated && (
-        <div className="last-updated">
+        <div className="last-updated" style={{ fontSize: '11px', margin: '8px 0 0 0' }}>
           Last updated: {lastUpdated.toLocaleString()}
           {useMockData && <span style={{ color: '#f59e0b' }}> (Using Mock Data)</span>}
         </div>

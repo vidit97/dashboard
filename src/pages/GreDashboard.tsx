@@ -7,6 +7,7 @@ import ClientGantt from '../components/ClientGantt'
 import BrokerCheckpoints from '../components/BrokerCheckpoints'
 import TcpConnections from '../components/TcpConnections'
 import RecentActivity from '../components/RecentActivity'
+import RecentConnectDisconnects from '../components/RecentConnectDisconnects'
 import { ActiveSubscriptions } from '../ui/ActiveSubscriptions'
 import { SubscriptionState } from '../ui/SubscriptionState'
 import { ClientTopicFootprintChart } from '../ui/ClientTopicFootprint'
@@ -57,6 +58,16 @@ export default function GreDashboard() {
           <SubscriptionChurn 
             className="chart-half-width"
             refreshInterval={120}
+          />
+        </ErrorBoundary>
+      </div>
+
+      {/* Connection Events Section */}
+      <div className="charts-row">
+        <ErrorBoundary>
+          <RecentConnectDisconnects 
+            className="chart-full-width"
+            refreshInterval={60}
           />
         </ErrorBoundary>
       </div>

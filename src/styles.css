@@ -813,144 +813,176 @@ button:disabled {
   font-weight: bold;
 }
 
-/* Broker Checkpoints Component Styles */
-.checkpoint-count {
-  font-size: 14px;
-  color: #6b7280;
-  font-weight: normal;
+/* Broker Checkpoints Component Styles - Compact Version */
+.checkpoint-compact-summary {
+  margin: 16px 0;
 }
 
-.checkpoint-summary {
-  margin: 20px 0;
-}
-
-.checkpoint-stats {
+.compact-stats {
   display: flex;
-  gap: 24px;
+  gap: 20px;
+  margin-bottom: 12px;
+  align-items: center;
   flex-wrap: wrap;
 }
 
-.stat-item {
+.compact-stat {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
 }
 
-.stat-label {
+.compact-stat .stat-label {
   font-size: 12px;
   color: #6b7280;
   font-weight: 500;
 }
 
-.stat-value {
-  font-size: 16px;
+.compact-stat .stat-value {
+  font-size: 14px;
   font-weight: 600;
   color: #374151;
+  background: #f3f4f6;
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
-.checkpoint-timeline {
-  margin-top: 20px;
+.checkpoint-mini-timeline {
+  margin-top: 8px;
 }
 
-.timeline-container {
-  max-height: 300px;
-  overflow-y: auto;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-}
-
-.checkpoint-marker {
-  display: flex;
-  padding: 12px 16px;
-  border-bottom: 1px solid #f3f4f6;
-  gap: 12px;
-  align-items: flex-start;
-}
-
-.checkpoint-marker:last-child {
-  border-bottom: none;
-}
-
-.checkpoint-marker:hover {
-  background: #f9fafb;
-}
-
-.marker-dot {
-  font-size: 16px;
-  margin-top: 2px;
-}
-
-.marker-details {
-  flex: 1;
-}
-
-.marker-time {
-  font-size: 12px;
+.timeline-label {
+  font-size: 11px;
   color: #6b7280;
-  margin-bottom: 4px;
-}
-
-.marker-description {
-  font-size: 14px;
-  color: #374151;
-  line-height: 1.4;
-}
-
-.timeline-overflow {
-  text-align: center;
-  padding: 12px;
-  color: #6b7280;
-  font-size: 14px;
-  border-top: 1px solid #e5e7eb;
-  background: #f8fafc;
-}
-
-/* TCP Connections Component Styles */
-.tcp-summary {
-  margin: 20px 0;
-}
-
-.tcp-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 16px;
-}
-
-.stat-card {
-  background: #ffffff;
-  padding: 16px;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  text-align: center;
-}
-
-.stat-card .stat-label {
-  font-size: 12px;
-  color: #6b7280;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   font-weight: 500;
 }
 
-.stat-card .stat-value {
-  font-size: 20px;
-  font-weight: 700;
+.mini-markers {
+  position: relative;
+  height: 20px;
+  background: linear-gradient(to right, #e5e7eb 0%, #d1d5db 50%, #e5e7eb 100%);
+  border-radius: 10px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+}
+
+.mini-marker {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  background: #ffffff;
+  border: 2px solid #10b981;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s;
+  animation: pulse-in 0.3s ease-out;
+}
+
+.mini-marker:hover {
+  transform: scale(1.2);
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+@keyframes pulse-in {
+  0% { 
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% { 
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+  100% { 
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.no-data-compact {
+  text-align: center;
+  padding: 20px;
+  color: #6b7280;
+  font-size: 14px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px dashed #d1d5db;
+}
+
+/* TCP Connections Component Styles - Compact Version */
+.tcp-compact-summary {
+  margin: 16px 0;
+}
+
+.compact-tcp-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.compact-tcp-stats .compact-stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.compact-tcp-stats .stat-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.compact-tcp-stats .stat-value {
+  font-size: 13px;
+  font-weight: 600;
   color: #374151;
-}
-
-.tcp-chart {
-  margin-top: 20px;
-}
-
-.tcp-table-container {
-  margin-top: 20px;
-}
-
-.connection-count {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: #eff6ff;
   padding: 2px 6px;
   border-radius: 4px;
+  border: 1px solid #dbeafe;
+}
+
+.tcp-sparkline-container {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sparkline-label {
+  font-size: 11px;
+  color: #6b7280;
   font-weight: 500;
+  min-width: 90px;
+}
+
+.tcp-sparkline {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.tcp-sparkline svg {
+  display: block;
+}
+
+.sparkline-dot {
+  transition: all 0.2s ease;
+}
+
+.sparkline-dot:hover {
+  r: 2.5;
+  fill: #1d4ed8;
 }
 
 /* Recent Activity Component Styles */
@@ -1082,5 +1114,149 @@ button:disabled {
   .activity-timestamp {
     min-width: auto;
     text-align: left;
+  }
+}
+
+/* Recent Connect/Disconnect Events Styles */
+.connect-disconnect-summary {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.cd-stats {
+  display: flex;
+  gap: 24px;
+  justify-content: space-around;
+}
+
+.cd-stat {
+  text-align: center;
+}
+
+.cd-stat .stat-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.cd-stat .stat-value {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.cd-stat .stat-value.connect {
+  color: #10b981;
+}
+
+.cd-stat .stat-value.disconnect {
+  color: #ef4444;
+}
+
+.cd-stat .stat-value.positive {
+  color: #10b981;
+}
+
+.cd-stat .stat-value.negative {
+  color: #ef4444;
+}
+
+.stacked-area-container {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.connect-disconnect-table-container {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.table-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-filter label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.action-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.action-badge.connect,
+.action-badge.connected {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.action-badge.disconnect,
+.action-badge.disconnected {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.table-overflow {
+  padding: 12px 16px;
+  background-color: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+  font-size: 12px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.mock-data-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.mock-data-toggle input[type="checkbox"] {
+  margin: 0;
+}
+
+/* Responsive adjustments for connect/disconnect component */
+@media (max-width: 768px) {
+  .cd-stats {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .table-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .table-filter {
+    width: 100%;
+    justify-content: space-between;
   }
 }
