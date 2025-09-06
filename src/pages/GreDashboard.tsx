@@ -11,7 +11,6 @@ import RecentConnectDisconnects from '../components/RecentConnectDisconnects'
 import { ActiveSubscriptions } from '../ui/ActiveSubscriptions'
 import { SubscriptionState } from '../ui/SubscriptionState'
 import { ErrorBoundary } from '../components/ErrorBoundary'
-import { ApiTester } from '../components/ApiTester'
 
 export default function GreDashboard() {
   return (
@@ -24,9 +23,6 @@ export default function GreDashboard() {
           </span>
         </div>
       </div>
-
-      {/* API Connectivity Test */}
-      <ApiTester />
 
       {/* Connected Clients Section */}
       <div className="charts-row">

@@ -223,28 +223,32 @@ export class GreApiService {
   }
 
   // Process session timeline data
-  static async getSessionTimeline(hoursBack: number = 24): Promise<SessionTimelineEntry[]> {
+  // Fetch and process session timeline limited to the requested time window.
+  // This avoids fetching ALL sessions which can be very large.
+  static async getSessionTimeline(hoursBack: number = 24, limit: number = 1000): Promise<SessionTimelineEntry[]> {
     try {
-      const [sessions, connectionEvents] = await Promise.all([
-        this.getAllSessions(),
-        this.getConnectionEvents(hoursBack)
-      ])
-
-      const timeline: SessionTimelineEntry[] = []
-      
-      // Process sessions that started within the time window
       const fromDate = new Date()
       fromDate.setHours(fromDate.getHours() - hoursBack)
-      
+      const isoFrom = fromDate.toISOString()
+
+      // Ask the server for only sessions that started within the window.
+      // Use a sensible default limit; callers can increase if needed.
+      const url = `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?start_ts=gte.${isoFrom}&order=start_ts.asc&limit=${limit}`
+      const response = await greApi.get<Session[]>(url)
+      const sessions = response.data
+
+      const timeline: SessionTimelineEntry[] = []
+
       sessions.forEach(session => {
         if (!session.start_ts) return
-        
+
         const startTime = new Date(session.start_ts)
+        // skip entries that somehow are before the window
         if (startTime >= fromDate) {
-          const duration = session.end_ts 
+          const duration = session.end_ts
             ? (new Date(session.end_ts).getTime() - startTime.getTime()) / (1000 * 60)
             : (Date.now() - startTime.getTime()) / (1000 * 60)
-          
+
           timeline.push({
             client: session.client || 'Unknown',
             username: session.username || 'Unknown',
@@ -259,7 +263,101 @@ export class GreApiService {
       return timeline.sort((a, b) => new Date(a.start_ts).getTime() - new Date(b.start_ts).getTime())
     } catch (error) {
       console.error('Error processing session timeline:', error)
-      throw new Error('Failed to process session timeline')
+      // Preserve some context from axios errors when available
+      if ((error as any).response) {
+        const resp = (error as any).response
+        throw new Error(`Failed to process session timeline: ${resp.status} ${JSON.stringify(resp.data).slice(0,200)}`)
+      }
+      throw new Error(`Failed to process session timeline: ${(error as Error).message}`)
+    }
+  }
+
+  // Paginated session timeline: returns entries, total count (if available), and hasMore flag.
+  // Accepts an optional AbortSignal to cancel requests.
+  static async getSessionTimelinePaginated(
+    hoursBack: number = 24,
+    limit: number = 100,
+    offset: number = 0,
+    signal?: AbortSignal,
+    searchTerm?: string,
+    filters?: Record<string, string>,
+    order?: string
+  ): Promise<{ entries: SessionTimelineEntry[]; total: number | null; hasMore: boolean }> {
+    try {
+      const fromDate = new Date()
+      fromDate.setHours(fromDate.getHours() - hoursBack)
+      const isoFrom = fromDate.toISOString()
+
+      // Build query string with filters, search and ordering
+      const parts: string[] = []
+      parts.push(`start_ts=gte.${isoFrom}`)
+      parts.push(`limit=${limit}`)
+      parts.push(`offset=${offset}`)
+      // ordering: default to start_ts.desc if not provided
+      parts.push(`order=${order || 'start_ts.desc'}`)
+
+      // append simple filters (e.g., end_ts=is.null or client=in.(...))
+      if (filters) {
+        for (const [k, v] of Object.entries(filters)) {
+          parts.push(`${k}=${v}`)
+        }
+      }
+
+      // add search OR across client and username when provided
+      if (searchTerm && searchTerm.trim().length > 0) {
+        // ilike search with wildcard
+        const escaped = searchTerm.replace(/([%_])/g, '\\$1')
+        parts.push(`or=(client.ilike.*${escaped}*,username.ilike.*${escaped}*)`)
+      }
+
+      const url = `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?${parts.join('&')}`
+
+      const response = await greApi.get<Session[]>(url, {
+        headers: {
+          'Prefer': 'count=exact'
+        },
+        signal
+      })
+
+  const sessions = response.data
+
+      const entries: SessionTimelineEntry[] = sessions
+        .filter(s => !!s.start_ts)
+        .map(s => {
+          const start = new Date(s.start_ts!).getTime()
+          const end = s.end_ts ? new Date(s.end_ts).getTime() : Date.now()
+          const duration = (end - start) / (1000 * 60)
+          return {
+            client: s.client || 'Unknown',
+            username: s.username || 'Unknown',
+            start_ts: s.start_ts as string,
+            end_ts: s.end_ts,
+            duration,
+            isActive: !s.end_ts
+          }
+        })
+
+      // Try to read total from Content-Range header: format like 0-24/49530
+      let total: number | null = null
+      const contentRange = (response.headers && (response.headers['content-range'] || response.headers['Content-Range'])) as string | undefined
+      if (contentRange) {
+        const parts = contentRange.split('/').map(p => p.trim())
+        if (parts.length === 2) {
+          const totalNum = parseInt(parts[1], 10)
+          if (!isNaN(totalNum)) total = totalNum
+        }
+      }
+
+      const hasMore = typeof total === 'number' ? offset + sessions.length < total : sessions.length === limit
+
+      return { entries, total, hasMore }
+    } catch (error) {
+      console.error('Error fetching paginated session timeline:', error)
+      if ((error as any).response) {
+        const resp = (error as any).response
+        throw new Error(`Failed to fetch session timeline: ${resp.status} ${JSON.stringify(resp.data).slice(0,200)}`)
+      }
+      throw new Error(`Failed to fetch session timeline: ${(error as Error).message}`)
     }
   }
 
