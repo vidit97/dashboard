@@ -325,63 +325,46 @@ export class GreApiService {
   // Process connection/disconnection events aggregated by time buckets
   static async getConnectionChurn(hoursBack: number = 24, bucketSizeMinutes: number = 5): Promise<SubscriptionEvent[]> {
     try {
-      // Get sessions data to derive connection/disconnection events
-      const sessions = await this.getAllSessions()
+      // Get connection and disconnection events from /events endpoint
+      console.log(`Getting connection events for last ${hoursBack} hours`)
+      const events = await this.getConnectionEvents(hoursBack)
+      console.log(`Raw events fetched: ${events.length}`)
       
-      // Filter sessions to the time range
-      const cutoffTime = new Date(Date.now() - hoursBack * 60 * 60 * 1000)
-      const recentSessions = sessions.filter(session => {
-        const startTime = session.start_ts ? new Date(session.start_ts) : null
-        const endTime = session.end_ts ? new Date(session.end_ts) : null
-        
-        return (startTime && startTime >= cutoffTime) || 
-               (endTime && endTime >= cutoffTime)
-      })
+      // Filter for only connected and disconnected events
+      const connectionEvents = events.filter(event => 
+        event.action === 'connected' || event.action === 'disconnected'
+      )
+      console.log(`Filtered connection events: ${connectionEvents.length}`)
+      console.log('Sample events:', connectionEvents.slice(0, 3))
       
       // Group events by time buckets
       const buckets = new Map<string, { connects: number, disconnects: number }>()
       
-      recentSessions.forEach(session => {
-        // Process connection event (start_ts)
-        if (session.start_ts) {
-          const startTime = new Date(session.start_ts)
-          if (startTime >= cutoffTime) {
-            const bucketTime = new Date(
-              startTime.getFullYear(),
-              startTime.getMonth(),
-              startTime.getDate(),
-              startTime.getHours(),
-              Math.floor(startTime.getMinutes() / bucketSizeMinutes) * bucketSizeMinutes
-            )
-            
-            const bucketKey = bucketTime.toISOString()
-            if (!buckets.has(bucketKey)) {
-              buckets.set(bucketKey, { connects: 0, disconnects: 0 })
-            }
-            buckets.get(bucketKey)!.connects++
-          }
+      connectionEvents.forEach(event => {
+        const eventTime = new Date(event.ts)
+        const bucketTime = new Date(
+          eventTime.getFullYear(),
+          eventTime.getMonth(),
+          eventTime.getDate(),
+          eventTime.getHours(),
+          Math.floor(eventTime.getMinutes() / bucketSizeMinutes) * bucketSizeMinutes
+        )
+        
+        const bucketKey = bucketTime.toISOString()
+        
+        if (!buckets.has(bucketKey)) {
+          buckets.set(bucketKey, { connects: 0, disconnects: 0 })
         }
         
-        // Process disconnection event (end_ts)
-        if (session.end_ts) {
-          const endTime = new Date(session.end_ts)
-          if (endTime >= cutoffTime) {
-            const bucketTime = new Date(
-              endTime.getFullYear(),
-              endTime.getMonth(),
-              endTime.getDate(),
-              endTime.getHours(),
-              Math.floor(endTime.getMinutes() / bucketSizeMinutes) * bucketSizeMinutes
-            )
-            
-            const bucketKey = bucketTime.toISOString()
-            if (!buckets.has(bucketKey)) {
-              buckets.set(bucketKey, { connects: 0, disconnects: 0 })
-            }
-            buckets.get(bucketKey)!.disconnects++
-          }
+        const bucket = buckets.get(bucketKey)!
+        if (event.action === 'connected') {
+          bucket.connects++
+        } else if (event.action === 'disconnected') {
+          bucket.disconnects++
         }
       })
+
+      console.log(`Created ${buckets.size} time buckets`)
 
       // Convert to array format compatible with SubscriptionEvent
       const result: SubscriptionEvent[] = []

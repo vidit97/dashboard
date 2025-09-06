@@ -368,22 +368,25 @@ export const SearchFilterTable = ({
           <div style={{ 
             overflowX: 'auto', 
             border: '1px solid #e5e7eb', 
-            borderRadius: '8px' 
+            borderRadius: '8px',
+            background: '#ffffff'
           }}>
             <table style={{ 
               width: '100%', 
-              borderCollapse: 'collapse', 
+              borderCollapse: 'separate', 
+              borderSpacing: 0,
               backgroundColor: '#ffffff' 
             }}>
               <thead style={{ backgroundColor: '#f9fafb' }}>
                 <tr>
-                  {columns.map((column) => (
+                  {columns.map((column, colIdx) => (
                     <th key={column.key} style={{ 
                       padding: '12px', 
-                      textAlign: 'left', 
+                      textAlign: column.key === 'qos' ? 'center' : 'left', 
                       fontWeight: '600', 
                       color: '#374151',
-                      borderBottom: '1px solid #e5e7eb'
+                      borderBottom: '1px solid #e5e7eb',
+                      borderRight: colIdx < columns.length - 1 ? '1px solid #f3f4f6' : 'none'
                     }}>
                       {column.label}
                     </th>
@@ -393,13 +396,17 @@ export const SearchFilterTable = ({
               <tbody>
                 {data.map((row, index) => (
                   <tr key={index} style={{ 
-                    borderBottom: index < data.length - 1 ? '1px solid #f3f4f6' : 'none' 
+                    backgroundColor: index % 2 === 0 ? '#ffffff' : '#fbfdfe',
+                    borderBottom: index < data.length - 1 ? '1px solid #f3f4f6' : 'none'
                   }}>
-                    {columns.map((column) => (
+                    {columns.map((column, colIdx) => (
                       <td key={column.key} style={{ 
                         padding: '12px', 
                         color: '#374151',
-                        fontSize: '14px'
+                        fontSize: '14px',
+                        textAlign: column.key === 'qos' ? 'center' : 'left',
+                        verticalAlign: 'middle',
+                        borderRight: colIdx < columns.length - 1 ? '1px solid #f3f4f6' : 'none'
                       }}>
                         {column.render ? column.render(row[column.key], row) : row[column.key]}
                       </td>

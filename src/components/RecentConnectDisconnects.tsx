@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { GreApiService, formatShortTime } from '../services/greApi'
 import { SubscriptionEvent } from '../config/greApi'
+import type { Event } from '../types/api'
 
 interface ConnectDisconnectProps {
   className?: string
@@ -32,23 +33,26 @@ export default function RecentConnectDisconnects({ className, refreshInterval = 
   const [error, setError] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [useMockData, setUseMockData] = useState(false)
+  const [recentEvents, setRecentEvents] = useState<Event[] | null>(null)
 
   const processConnectionData = useCallback((events: SubscriptionEvent[]) => {
-    // Group events by 5-minute buckets and aggregate
-    const buckets = new Map()
-    
+    // Group events into buckets of variable size (server may already bucket, but handle raw events too)
+    const buckets = new Map<string, any>()
+
     events.forEach(event => {
       const eventTime = new Date(event.ts)
+      // Use the event.ts as-is (server may provide bucketed timestamps). Round down to nearest minute
       const bucketTime = new Date(
         eventTime.getFullYear(),
         eventTime.getMonth(),
         eventTime.getDate(),
         eventTime.getHours(),
-        Math.floor(eventTime.getMinutes() / 5) * 5
+        eventTime.getMinutes(),
+        0
       )
-      
+
       const bucketKey = bucketTime.toISOString()
-      
+
       if (!buckets.has(bucketKey)) {
         buckets.set(bucketKey, {
           timestamp: bucketKey,
@@ -58,12 +62,12 @@ export default function RecentConnectDisconnects({ className, refreshInterval = 
           netChange: 0
         })
       }
-      
+
       const bucket = buckets.get(bucketKey)
       if (event.action === 'subscribe') {
-        bucket.connects += event.count
+        bucket.connects += event.count || 0
       } else if (event.action === 'unsubscribe') {
-        bucket.disconnects += event.count
+        bucket.disconnects += event.count || 0
       }
       bucket.netChange = bucket.connects - bucket.disconnects
     })
@@ -82,9 +86,28 @@ export default function RecentConnectDisconnects({ className, refreshInterval = 
         setConnectDisconnectData(MOCK_CONNECT_DISCONNECT_DATA)
       } else {
         const hoursBack = timeRange === '24h' ? 24 : 168
-        const events = await GreApiService.getConnectionChurn(hoursBack)
+        // Adaptive bucket size: 5 minutes for 24h, 60 minutes for 7d
+        const bucketSize = timeRange === '24h' ? 5 : 60
+        console.log(`Fetching connection data for last ${hoursBack} hours (${timeRange}), bucketSize=${bucketSize}m`)
+
+        // Ask the service to aggregate into the chosen bucket size when possible
+        const events = await GreApiService.getConnectionChurn(hoursBack, bucketSize)
+        console.log(`Received ${events.length} connection event entries`)
+
         const processed = processConnectionData(events)
+        console.log(`Processed into ${processed.length} time buckets`)
         setConnectDisconnectData(processed)
+
+        // Also fetch recent raw events for the feed/table (latest 50) and filter to connects/disconnects
+        try {
+          const raw = await GreApiService.getAllEvents(50)
+          const feed = raw.filter(e => e.action === 'connected' || e.action === 'disconnected')
+            .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
+          setRecentEvents(feed)
+        } catch (fe) {
+          console.warn('Failed to fetch recent events feed:', fe)
+          setRecentEvents([])
+        }
       }
       
       setLastUpdated(new Date())
@@ -219,6 +242,35 @@ export default function RecentConnectDisconnects({ className, refreshInterval = 
                 />
               </AreaChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Recent events feed table */}
+      {!loading && recentEvents && recentEvents.length > 0 && (
+        <div style={{ marginTop: '20px' }}>
+          <h3 className="breakdown-title">Recent Connect/Disconnect Events</h3>
+          <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: '8px', background: '#fff' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ background: '#f9fafb' }}>
+                <tr>
+                  <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Time</th>
+                  <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Action</th>
+                  <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Client</th>
+                  <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Username</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentEvents.map((ev, idx) => (
+                  <tr key={ev.id} style={{ borderBottom: idx < recentEvents.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
+                    <td style={{ padding: '12px' }}>{new Date(ev.ts).toLocaleString()}</td>
+                    <td style={{ padding: '12px' }}>{ev.action}</td>
+                    <td style={{ padding: '12px' }}>{ev.client}</td>
+                    <td style={{ padding: '12px' }}>{ev.username || ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

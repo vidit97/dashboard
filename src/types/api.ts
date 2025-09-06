@@ -319,28 +319,7 @@ export const API_CONFIGS: Record<string, ApiTableConfig> = {
     allColumns: ['id', 'broker', 'metric', 'value', 'ts']
   },
 
-  // Statistics Tables
-  pub_stats: {
-    name: 'pub_stats',
-    endpoint: '/pub_stats',
-    displayName: 'Publishing Statistics',
-    defaultColumns: ['id', 'client', 'topic', 'packets_published', 'bytes_published', 'last_ts'],
-    allColumns: ['id', 'session_id', 'client', 'topic', 'packets_published', 'bytes_published', 'first_ts', 'last_ts']
-  },
-  sub_stats: {
-    name: 'sub_stats',
-    endpoint: '/sub_stats',
-    displayName: 'Subscription Statistics',
-    defaultColumns: ['id', 'client', 'topic', 'packets_delivered', 'bytes_subscribed', 'last_ts'],
-    allColumns: ['id', 'session_id', 'client', 'topic', 'packets_delivered', 'bytes_subscribed', 'first_ts', 'last_ts']
-  },
-  drop_stats: {
-    name: 'drop_stats',
-    endpoint: '/drop_stats',
-    displayName: 'Drop Statistics',
-    defaultColumns: ['id', 'client', 'topic', 'packets_dropped', 'bytes_dropped', 'last_ts'],
-    allColumns: ['id', 'client', 'topic', 'packets_dropped', 'bytes_dropped', 'first_ts', 'last_ts']
-  },
+  // Statistics tables removed (server no longer exposes these views)
 
   // Time-series Tables
   pub_minute: {
@@ -364,92 +343,6 @@ export const API_CONFIGS: Record<string, ApiTableConfig> = {
     defaultColumns: ['ts_bucket', 'client', 'topic', 'packets', 'bytes'],
     allColumns: ['ts_bucket', 'client', 'topic', 'packets', 'bytes']
   },
-
-  // Views - Analytical Data
-  v_subscriptions_active: {
-    name: 'v_subscriptions_active',
-    endpoint: '/v_subscriptions_active',
-    displayName: 'Active Subscriptions',
-    defaultColumns: ['id', 'client', 'topic', 'qos', 'created_at'],
-    allColumns: ['id', 'session_id', 'client', 'topic', 'qos', 'created_at', 'updated_at']
-  },
-  v_client_last_session: {
-    name: 'v_client_last_session',
-    endpoint: '/v_client_last_session',
-    displayName: 'Client Last Sessions',
-    defaultColumns: ['id', 'client', 'username', 'start_ts', 'end_ts', 'ip_address'],
-    allColumns: ['id', 'client_id', 'client', 'username', 'start_ts', 'end_ts', 'protocol', 'protocol_version', 'clean_session', 'keepalive', 'ip_address', 'port', 'tls_version', 'tls_cipher']
-  },
-  v_sessions_open: {
-    name: 'v_sessions_open',
-    endpoint: '/v_sessions_open',
-    displayName: 'Open Sessions',
-    defaultColumns: ['id', 'client', 'username', 'start_ts', 'protocol', 'ip_address'],
-    allColumns: ['id', 'client_id', 'client', 'username', 'start_ts', 'protocol', 'protocol_version', 'clean_session', 'keepalive', 'ip_address', 'port', 'tls_version', 'tls_cipher']
-  },
-  v_client_detail: {
-    name: 'v_client_detail',
-    endpoint: '/v_client_detail',
-    displayName: 'Client Details',
-    defaultColumns: ['client', 'last_start_ts', 'packets_published_24h', 'bytes_published_24h', 'packets_delivered_24h'],
-    allColumns: ['client', 'last_start_ts', 'last_end_ts', 'protocol', 'protocol_version', 'clean_session', 'keepalive', 'ip_address', 'port', 'tls_version', 'tls_cipher', 'packets_published_24h', 'bytes_published_24h', 'packets_delivered_24h', 'bytes_subscribed_24h', 'active_subscriptions', 'last_will_published_at']
-  },
-  v_overview_gre: {
-    name: 'v_overview_gre',
-    endpoint: '/v_overview_gre',
-    displayName: 'System Overview',
-    defaultColumns: ['total_clients', 'connected_clients', 'active_subscriptions', 'messages_published_24h', 'messages_delivered_24h'],
-    allColumns: ['total_clients', 'connected_clients', 'active_subscriptions', 'messages_published_24h', 'bytes_published_24h', 'messages_delivered_24h', 'bytes_subscribed_24h', 'wills_7d', 'last_event_ts']
-  },
-  v_client_stats_24h: {
-    name: 'v_client_stats_24h',
-    endpoint: '/v_client_stats_24h',
-    displayName: 'Client 24h Statistics',
-    defaultColumns: ['client', 'packets_published_24h', 'bytes_published_24h', 'packets_delivered_24h', 'bytes_subscribed_24h'],
-    allColumns: ['client', 'packets_published_24h', 'bytes_published_24h', 'packets_delivered_24h', 'bytes_subscribed_24h']
-  },
-  v_topic_detail_24h: {
-    name: 'v_topic_detail_24h',
-    endpoint: '/v_topic_detail_24h',
-    displayName: 'Topic 24h Statistics',
-    defaultColumns: ['topic', 'packets_published_24h', 'bytes_published_24h', 'packets_delivered_24h', 'active_clients'],
-    allColumns: ['topic', 'packets_published_24h', 'bytes_published_24h', 'packets_delivered_24h', 'bytes_subscribed_24h', 'active_clients']
-  },
-  v_drops_24h: {
-    name: 'v_drops_24h',
-    endpoint: '/v_drops_24h',
-    displayName: 'Drops 24h Statistics',
-    defaultColumns: ['client', 'topic', 'packets_dropped_24h', 'bytes_dropped_24h'],
-    allColumns: ['client', 'topic', 'packets_dropped_24h', 'bytes_dropped_24h']
-  },
-  v_wills_recent: {
-    name: 'v_wills_recent',
-    endpoint: '/v_wills_recent',
-    displayName: 'Recent Will Messages',
-    defaultColumns: ['id', 'client', 'topic', 'qos', 'retain', 'published_at'],
-    allColumns: ['id', 'session_id', 'client', 'topic', 'qos', 'retain', 'payload', 'published_at']
-  },
-
   // Time-series Views (60-minute aggregates)
-  v_pub_minute_60m: {
-    name: 'v_pub_minute_60m',
-    endpoint: '/v_pub_minute_60m',
-    displayName: 'Publishing (Last 60 Minutes)',
-    defaultColumns: ['ts_bucket', 'packets', 'bytes'],
-    allColumns: ['ts_bucket', 'packets', 'bytes']
-  },
-  v_sub_minute_60m: {
-    name: 'v_sub_minute_60m',
-    endpoint: '/v_sub_minute_60m',
-    displayName: 'Subscriptions (Last 60 Minutes)',
-    defaultColumns: ['ts_bucket', 'packets', 'bytes'],
-    allColumns: ['ts_bucket', 'packets', 'bytes']
-  },
-  v_drop_minute_60m: {
-    name: 'v_drop_minute_60m',
-    endpoint: '/v_drop_minute_60m',
-    displayName: 'Drops (Last 60 Minutes)',
-    defaultColumns: ['ts_bucket', 'packets', 'bytes'],
-    allColumns: ['ts_bucket', 'packets', 'bytes']
-  }
+  // (removed server-side views have been deleted from the API and so are not exposed here)
 };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { GreApiService } from '../services/greApi'
 import type { Subscription, TopicSubscription } from '../config/greApi'
+import SearchFilterTable from '../components/SearchFilterTable'
 
 interface SubscriptionStateProps {
   className?: string
@@ -11,6 +12,12 @@ export const SubscriptionState = ({ className }: SubscriptionStateProps) => {
     activeSubscriptions: [],
     topicBreakdown: []
   })
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(10)
+  const [total, setTotal] = useState(0)
+  const [topN, setTopN] = useState(10)
+  const [availableFilterData, setAvailableFilterData] = useState<{ client: string[] }>({ client: [] })
+  const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>({ client: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedTopic, setSelectedTopic] = useState(null)
@@ -19,8 +26,28 @@ export const SubscriptionState = ({ className }: SubscriptionStateProps) => {
     try {
       setLoading(true)
       setError(null)
-      const result = await GreApiService.getSubscriptionState()
-      setData(result)
+      // Prepare server-side filters
+      const baseFilters: Record<string, string> = { 'active': 'is.true', 'order': 'updated_at.desc' }
+      if (selectedTopic) baseFilters['topic'] = `eq.${selectedTopic}`
+      if (selectedFilters.client && selectedFilters.client.length > 0) {
+        baseFilters['client'] = `in.(${selectedFilters.client.join(',')})`
+      }
+
+      // Fetch paginated subscriptions for table and full topic breakdown for chart
+      const [paged, full] = await Promise.all([
+        GreApiService.getSubscriptionsPaginated({ limit: pageSize, offset: page * pageSize, filters: baseFilters }),
+        GreApiService.getActiveSubscriptions()
+      ])
+
+      // populate available clients for the client selector
+      const clients = Array.from(new Set((full.subscriptions || []).map((s: Subscription) => s.client))).sort()
+      setAvailableFilterData({ client: clients })
+
+      setData({
+        activeSubscriptions: paged.data,
+        topicBreakdown: full.topicBreakdown
+      })
+      setTotal(paged.totalCount)
     } catch (err) {
       console.error('Error fetching subscription state:', err)
       setError(err instanceof Error ? err.message : 'Unknown error')
@@ -44,8 +71,33 @@ export const SubscriptionState = ({ className }: SubscriptionStateProps) => {
   }
 
   useEffect(() => {
-    fetchData()
+  fetchData()
   }, [])
+
+  // refetch when page, pageSize, selectedTopic, or selectedFilters change
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      try {
+        const baseFilters: Record<string, string> = { 'active': 'is.true', 'order': 'updated_at.desc' }
+        if (selectedTopic) baseFilters['topic'] = `eq.${selectedTopic}`
+        if (selectedFilters.client && selectedFilters.client.length > 0) {
+          baseFilters['client'] = `in.(${selectedFilters.client.join(',')})`
+        }
+
+        const paged = await GreApiService.getSubscriptionsPaginated({ limit: pageSize, offset: page * pageSize, filters: baseFilters })
+        setData(prev => ({ ...prev, activeSubscriptions: paged.data }))
+        setTotal(paged.totalCount)
+      } catch (err) {
+        console.error('Error fetching paged subscriptions:', err)
+        setError(err instanceof Error ? err.message : 'Unknown error')
+      } finally {
+        setLoading(false)
+      }
+    }
+    // avoid initial double-fetch
+    if (!loading) load()
+  }, [page, pageSize, selectedTopic, selectedFilters])
 
   const qosColors = {
     0: '#10b981', // emerald
@@ -63,19 +115,18 @@ export const SubscriptionState = ({ className }: SubscriptionStateProps) => {
     const color = qosColors[qos as keyof typeof qosColors] || '#6b7280'
     const description = qosDescriptions[qos as keyof typeof qosDescriptions] || 'Unknown'
     return (
-      <span 
-        className="px-2 py-1 text-xs font-medium rounded-full text-white cursor-help"
-        style={{ backgroundColor: color }}
-        title={description}
-      >
-        QoS {qos}
-      </span>
+      <div title={description} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span 
+          className="text-xs font-medium rounded-full text-white cursor-help"
+          style={{ backgroundColor: color, width: 56, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12 }}
+        >
+          QoS {qos}
+        </span>
+      </div>
     )
   }
 
-  const filteredSubscriptions = selectedTopic 
-    ? data.activeSubscriptions.filter(sub => sub.topic === selectedTopic)
-    : data.activeSubscriptions
+  const filteredSubscriptions = data.activeSubscriptions
 
   const formatDateTime = (dateString: string) => {
     try {
@@ -128,9 +179,9 @@ export const SubscriptionState = ({ className }: SubscriptionStateProps) => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="bg-blue-50 rounded-lg p-4">
-          <div className="text-2xl font-bold text-blue-600">{data.activeSubscriptions.length}</div>
+      <div className="text-2xl font-bold text-blue-600">{total}</div>
           <div className="text-sm text-blue-800">Total Active Subscriptions</div>
         </div>
         <div className="bg-green-50 rounded-lg p-4">
@@ -168,54 +219,34 @@ export const SubscriptionState = ({ className }: SubscriptionStateProps) => {
         <h4 className="text-md font-medium text-gray-700 mb-3">
           Active Subscriptions {selectedTopic && `for ${selectedTopic}`} ({filteredSubscriptions.length})
         </h4>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Client ID
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Topic
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  QoS
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Created
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Last Updated
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredSubscriptions.map((subscription, index) => (
-                <tr key={subscription.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    <div className="max-w-xs truncate" title={subscription.client}>
-                      {subscription.client}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <div className="max-w-xs truncate" title={subscription.topic}>
-                      {subscription.topic}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {getQosBadge(subscription.qos)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDateTime(subscription.created_at)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDateTime(subscription.updated_at)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+
+        <SearchFilterTable
+          title="Active Subscriptions"
+          data={filteredSubscriptions}
+          totalCount={total}
+          loading={loading}
+          error={error}
+          currentPage={page + 1}
+          totalPages={Math.max(1, Math.ceil(total / pageSize))}
+          pageSize={pageSize}
+          columns={[
+            { key: 'client', label: 'Client ID', render: (value: any) => <div className="max-w-xs truncate" title={value}>{value}</div> },
+            { key: 'topic', label: 'Topic', render: (value: any) => <div className="max-w-xs truncate" title={value}>{value}</div> },
+            { key: 'qos', label: 'QoS', render: (value: any, row: any) => getQosBadge(row.qos) },
+            { key: 'created_at', label: 'Created', render: (value: any) => formatDateTime(value) },
+            { key: 'updated_at', label: 'Last Updated', render: (value: any) => formatDateTime(value) }
+          ]}
+          filterConfigs={[
+            { key: 'client', label: 'Client IDs', searchable: true, type: 'multiselect' }
+          ]}
+          availableFilterData={{ ...availableFilterData }}
+          selectedFilters={selectedFilters}
+          onFilterChange={(filters) => { setSelectedFilters(filters); setPage(0) }}
+          onPageChange={(newPage) => { setPage(Math.max(0, newPage - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+          onRefresh={() => fetchData()}
+          onClearFilters={() => { setSelectedFilters({ client: [] }); setPage(0); fetchData() }}
+          className="subscriptions-table"
+        />
       </div>
 
       {filteredSubscriptions.length === 0 && !loading && (

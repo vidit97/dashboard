@@ -5,11 +5,7 @@ import { API_CONFIGS } from '../types/api'
 // Group tables by category for better organization
 const TABLE_CATEGORIES = {
   'Core Data': ['sessions', 'events', 'clients', 'subscriptions', 'wills', 'broker_metrics'],
-  'Statistics': ['pub_stats', 'sub_stats', 'drop_stats'],
-  'Time Series': ['pub_minute', 'sub_minute', 'drop_minute'],
-  'Live Views': ['v_subscriptions_active', 'v_sessions_open', 'v_client_last_session'],
-  'Analytics': ['v_client_detail', 'v_overview_gre', 'v_client_stats_24h', 'v_topic_detail_24h', 'v_drops_24h', 'v_wills_recent'],
-  '60min Charts': ['v_pub_minute_60m', 'v_sub_minute_60m', 'v_drop_minute_60m']
+  'Time Series': ['pub_minute', 'sub_minute', 'drop_minute']
 }
 
 export const ApiTablesPage = () => {
