@@ -1,13 +1,13 @@
 // Test script to verify GRE API connectivity
-import { GreApiService } from './src/services/greApi.js'
+import { GRE_API_CONFIG } from './src/config/greApi.js'
 
 async function testGreApi() {
   try {
     console.log('Testing GRE API connectivity...')
-  console.log('Base URL:', 'https://daddy-set-motivated-k.trycloudflare.com/')
+    console.log('Base URL:', GRE_API_CONFIG.BASE_URL)
     
     // Test basic sessions endpoint
-  const response = await fetch('https://daddy-set-motivated-k.trycloudflare.com/sessions')
+    const response = await fetch(`${GRE_API_CONFIG.BASE_URL}/sessions`)
     const data = await response.json()
     
     console.log('✅ API Response received')
@@ -15,7 +15,7 @@ async function testGreApi() {
     console.log('Sample session:', data[0])
     
     // Test connected clients
-  const connectedResponse = await fetch('https://daddy-set-motivated-k.trycloudflare.com/sessions?end_ts=is.null')
+    const connectedResponse = await fetch(`${GRE_API_CONFIG.BASE_URL}/sessions?end_ts=is.null`)
     const connectedData = await connectedResponse.json()
     
     console.log('✅ Connected clients query successful')
