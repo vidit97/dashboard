@@ -17,8 +17,8 @@
     }
   ],
   "env": {
-    "VITE_API_BASE_URL": "https://78e8ca98575f.ngrok-free.app",
-    "VITE_GRE_API_BASE_URL": "https://daddy-set-motivated-k.trycloudflare.com",
+    "VITE_API_BASE_URL": "https://ec53a1c6f957.ngrok-free.app",
+    "VITE_GRE_API_BASE_URL": "https://hungry-stories-deserve-import.trycloudflare.com",
     "VITE_DEFAULT_BROKER": "local"
   }
 }

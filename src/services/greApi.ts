@@ -1009,13 +1009,18 @@ export class GreApiService {
   // Generic pagination methods for all APIs
   static async getSessionsPaginated(params: PaginationParams = {}): Promise<{ data: ApiSession[], totalCount: number }> {
     try {
-      const { offset = 0, limit = 20, filters = {} } = params
+      const { offset = 0, limit = 20, filters = {}, sortColumn, sortDirection = 'asc' } = params
       
       // Build query parameters
       const queryParams = new URLSearchParams({
         offset: offset.toString(),
         limit: limit.toString(),
       })
+      
+      // Add sorting if specified
+      if (sortColumn) {
+        queryParams.append('order', `${sortColumn}.${sortDirection}`)
+      }
       
       // Add filter parameters
       Object.entries(filters).forEach(([key, value]) => {
@@ -1036,14 +1041,20 @@ export class GreApiService {
 
   static async getEventsPaginated(params: PaginationParams = {}): Promise<{ data: ApiEvent[], totalCount: number }> {
     try {
-      const { offset = 0, limit = 20, filters = {} } = params
+      const { offset = 0, limit = 20, filters = {}, sortColumn, sortDirection = 'desc' } = params
       
       // Build query parameters
       const queryParams = new URLSearchParams({
         offset: offset.toString(),
         limit: limit.toString(),
-        order: 'ts.desc'
       })
+      
+      // Add sorting - default to ts.desc for events if no sort specified
+      if (sortColumn) {
+        queryParams.append('order', `${sortColumn}.${sortDirection}`)
+      } else {
+        queryParams.append('order', 'ts.desc')
+      }
       
       // Add filter parameters
       Object.entries(filters).forEach(([key, value]) => {
@@ -1064,14 +1075,20 @@ export class GreApiService {
 
   static async getClientsPaginated(params: PaginationParams = {}): Promise<{ data: ApiClient[], totalCount: number }> {
     try {
-      const { offset = 0, limit = 20, filters = {} } = params
+      const { offset = 0, limit = 20, filters = {}, sortColumn, sortDirection = 'desc' } = params
       
       // Build query parameters
       const queryParams = new URLSearchParams({
         offset: offset.toString(),
         limit: limit.toString(),
-        order: 'last_seen.desc'
       })
+      
+      // Add sorting - default to last_seen.desc for clients if no sort specified
+      if (sortColumn) {
+        queryParams.append('order', `${sortColumn}.${sortDirection}`)
+      } else {
+        queryParams.append('order', 'last_seen.desc')
+      }
       
       // Add filter parameters
       Object.entries(filters).forEach(([key, value]) => {
@@ -1092,14 +1109,20 @@ export class GreApiService {
 
   static async getSubscriptionsPaginated(params: PaginationParams = {}): Promise<{ data: ApiSubscription[], totalCount: number }> {
     try {
-      const { offset = 0, limit = 20, filters = {} } = params
+      const { offset = 0, limit = 20, filters = {}, sortColumn, sortDirection = 'desc' } = params
       
       // Build query parameters
       const queryParams = new URLSearchParams({
         offset: offset.toString(),
         limit: limit.toString(),
-        order: 'created_at.desc'
       })
+      
+      // Add sorting - default to created_at.desc for subscriptions if no sort specified
+      if (sortColumn) {
+        queryParams.append('order', `${sortColumn}.${sortDirection}`)
+      } else {
+        queryParams.append('order', 'created_at.desc')
+      }
       
       // Add filter parameters
       Object.entries(filters).forEach(([key, value]) => {
@@ -1124,32 +1147,37 @@ export class GreApiService {
     params: PaginationParams = {}
   ): Promise<{ data: ApiDataType[], totalCount: number }> {
     try {
-      const { offset = 0, limit = 20, filters = {} } = params
+      const { offset = 0, limit = 20, filters = {}, sortColumn, sortDirection = 'desc' } = params
       
       const queryParams = new URLSearchParams({
         offset: offset.toString(),
         limit: limit.toString()
       })
       
+      // Add sorting if specified, otherwise try smart defaults
+      if (sortColumn) {
+        queryParams.append('order', `${sortColumn}.${sortDirection}`)
+      } else {
+        // Try to add default ordering - fallback gracefully if field doesn't exist
+        try {
+          // For views and analytical tables, try different ordering fields
+          if (endpoint.includes('_minute_60m') || endpoint.includes('_minute')) {
+            queryParams.append('order', 'ts_bucket.desc')
+          } else if (endpoint.includes('v_') || endpoint.includes('stats')) {
+            // For views and stats tables, don't add default ordering 
+            // as column availability varies
+          } else {
+            queryParams.append('order', 'id.desc')
+          }
+        } catch (e) {
+          // Ordering failed, continue without it
+        }
+      }
+      
       // Add filter parameters
       Object.entries(filters).forEach(([key, value]) => {
         queryParams.append(key, value)
       })
-      
-      // Try to add default ordering - fallback gracefully if field doesn't exist
-      try {
-        // For views and analytical tables, try different ordering fields
-        if (endpoint.includes('_minute_60m') || endpoint.includes('_minute')) {
-          queryParams.append('order', 'ts_bucket.desc')
-        } else if (endpoint.includes('v_') || endpoint.includes('stats')) {
-          // For views and stats tables, don't add default ordering 
-          // as column availability varies
-        } else {
-          queryParams.append('order', 'id.desc')
-        }
-      } catch (e) {
-        // Ordering failed, continue without it
-      }
       
       const response = await greApi.get<ApiDataType[]>(
         `${endpoint}?${queryParams.toString()}`,

@@ -30,6 +30,10 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
   const [selectedUsername, setSelectedUsername] = useState('')
   const [availableUsernames, setAvailableUsernames] = useState([])
   const [filters, setFilters] = useState({})
+  
+  // Sorting states
+  const [sortColumn, setSortColumn] = useState(null)
+  const [sortDirection, setSortDirection] = useState('asc')
 
   const loadData = async (offset = 0, limit = pageSize, applyFilters = true) => {
     setLoading(true)
@@ -48,22 +52,30 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
         }
       }
       
+      // Build pagination params with sorting
+      const paginationParams = {
+        offset,
+        limit,
+        filters: filterParams,
+        ...(sortColumn && { sortColumn, sortDirection })
+      }
+      
       switch (apiType) {
         case 'sessions':
-          result = await GreApiService.getSessionsPaginated({ offset, limit, filters: filterParams }) as { data: ApiSession[], totalCount: number }
+          result = await GreApiService.getSessionsPaginated(paginationParams) as { data: ApiSession[], totalCount: number }
           break
         case 'events':
-          result = await GreApiService.getEventsPaginated({ offset, limit, filters: filterParams }) as { data: ApiEvent[], totalCount: number }
+          result = await GreApiService.getEventsPaginated(paginationParams) as { data: ApiEvent[], totalCount: number }
           break
         case 'clients':
-          result = await GreApiService.getClientsPaginated({ offset, limit, filters: filterParams }) as { data: ApiClient[], totalCount: number }
+          result = await GreApiService.getClientsPaginated(paginationParams) as { data: ApiClient[], totalCount: number }
           break
         case 'subscriptions':
-          result = await GreApiService.getSubscriptionsPaginated({ offset, limit, filters: filterParams }) as { data: ApiSubscription[], totalCount: number }
+          result = await GreApiService.getSubscriptionsPaginated(paginationParams) as { data: ApiSubscription[], totalCount: number }
           break
         default:
           // Use generic method for all new tables
-          result = await GreApiService.getTableDataPaginated(config.endpoint, { offset, limit, filters: filterParams })
+          result = await GreApiService.getTableDataPaginated(config.endpoint, paginationParams)
           break
       }
       
@@ -118,13 +130,17 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
     setSelectedUsername('')
     setCurrentPage(0)
     
+    // Reset sorting
+    setSortColumn(null)
+    setSortDirection('asc')
+    
     loadData()
     loadAvailableUsernames()
   }, [apiType])
 
   useEffect(() => {
     loadData()
-  }, [currentPage, pageSize, searchClientId, selectedUsername])
+  }, [currentPage, pageSize, searchClientId, selectedUsername, sortColumn, sortDirection])
 
   const handlePageChange = (newPage: number) => {
     setCurrentPage(newPage)
@@ -169,12 +185,47 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
     setSelectedColumns(config.defaultColumns)
   }
 
+  // Sorting functionality
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // If clicking the same column, toggle direction
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      // If clicking a new column, set it as sort column with ascending direction
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
+    // Reset to first page when sorting changes
+    setCurrentPage(0)
+  }
+
+  const isTimestampColumn = (column: string): boolean => {
+    return column.includes('_ts') || column.includes('_at') || column === 'ts' || 
+           column.includes('_seen') || column === 'ts_bucket' || column === 'published_at'
+  }
+
   const formatCellValue = (value: any, column: string): string => {
     if (value === null || value === undefined) return '-'
     
-    // Format timestamps
-    if (column.includes('_ts') || column.includes('_at') || column === 'ts') {
-      return new Date(value).toLocaleString()
+    // Format timestamps with consistent format
+    if (isTimestampColumn(column)) {
+      try {
+        const date = new Date(value)
+        if (isNaN(date.getTime())) return String(value)
+        
+        // Use a consistent timestamp format
+        return date.toLocaleString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        })
+      } catch (error) {
+        return String(value)
+      }
     }
     
     // Format boolean values
@@ -218,6 +269,11 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
             ) : (
               <span>
                 Showing {startIndex}-{endIndex} of {totalCount} records
+                {sortColumn && (
+                  <span className="sort-status">
+                    {' • '}Sorted by {sortColumn.replace(/_/g, ' ')} ({sortDirection === 'asc' ? 'ascending' : 'descending'})
+                  </span>
+                )}
               </span>
             )}
           </div>
@@ -230,6 +286,18 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
           >
             {showColumnSelector ? 'Hide' : 'Show'} Columns
           </button>
+          {sortColumn && (
+            <button 
+              onClick={() => {
+                setSortColumn(null)
+                setSortDirection('asc')
+              }}
+              className="btn-clear-sort"
+              title="Clear sorting"
+            >
+              Clear Sort
+            </button>
+          )}
           <button 
             onClick={() => loadData(currentPage * pageSize, pageSize)}
             className="btn-primary"
@@ -309,8 +377,23 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
           <thead>
             <tr>
               {selectedColumns.map(column => (
-                <th key={column}>
-                  {column.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                <th 
+                  key={column} 
+                  className={`sortable-header ${sortColumn === column ? 'sorted' : ''}`}
+                  onClick={() => handleSort(column)}
+                >
+                  <div className="header-content">
+                    <span className="header-text">
+                      {column.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    </span>
+                    <span className="sort-indicator">
+                      {sortColumn === column ? (
+                        sortDirection === 'asc' ? '↑' : '↓'
+                      ) : (
+                        '↕'
+                      )}
+                    </span>
+                  </div>
                 </th>
               ))}
             </tr>
@@ -429,6 +512,11 @@ const apiTableStyles = `
   color: #6c757d;
 }
 
+.sort-status {
+  color: #1976d2;
+  font-weight: 500;
+}
+
 .api-table-controls {
   display: flex;
   gap: 12px;
@@ -467,6 +555,22 @@ const apiTableStyles = `
   background: #5a6268;
 }
 
+.btn-clear-sort {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #ffc107;
+  color: #000;
+}
+
+.btn-clear-sort:hover {
+  background: #e0a800;
+}
+
 .api-table-wrapper {
   overflow: auto;
   max-height: 600px;
@@ -487,6 +591,49 @@ const apiTableStyles = `
   position: sticky;
   top: 0;
   z-index: 10;
+}
+
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.sortable-header:hover {
+  background: #e9ecef !important;
+}
+
+.sortable-header.sorted {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-text {
+  flex: 1;
+}
+
+.sort-indicator {
+  font-size: 12px;
+  color: #6c757d;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.sortable-header:hover .sort-indicator {
+  opacity: 1;
+}
+
+.sortable-header.sorted .sort-indicator {
+  color: #1976d2;
+  opacity: 1;
+  font-weight: bold;
 }
 
 .api-table td {

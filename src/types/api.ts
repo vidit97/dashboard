@@ -264,6 +264,8 @@ export interface PaginationParams {
   offset?: number;
   limit?: number;
   filters?: Record<string, string>;
+  sortColumn?: string;
+  sortDirection?: 'asc' | 'desc';
 }
 
 export interface ApiTableConfig {
