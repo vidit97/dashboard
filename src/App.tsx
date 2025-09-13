@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard'
 import GreDashboard from './pages/GreDashboard'
 import { ApiTablesPage } from './pages/ApiTablesPage'
 import ClientTopicPage from './pages/ClientTopicPage'
+import TopicManagement from './pages/TopicManagement'
 
 export default function App() {
   return (
@@ -40,6 +41,12 @@ export default function App() {
               >
                 API Tables
               </NavLink>
+              <NavLink 
+                to="/topics" 
+                className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
+              >
+                Topic Management
+              </NavLink>
             </div>
           </div>
         </nav>
@@ -50,6 +57,7 @@ export default function App() {
           <Route path="/gre" element={<GreDashboard />} />
           <Route path="/client-topics" element={<ClientTopicPage />} />
           <Route path="/api-tables" element={<ApiTablesPage />} />
+          <Route path="/topics" element={<TopicManagement />} />
         </Routes>
       </div>
     </Router>

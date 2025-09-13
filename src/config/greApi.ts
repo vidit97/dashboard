@@ -144,3 +144,61 @@ export interface ClientTopicFootprint {
     created_at: string
   }[]
 }
+
+// Topic Management interfaces
+export interface TopicActivity {
+  topic: string
+  last_pub_ts: string | null
+  last_deliver_ts: string | null
+  pubs_7d: number
+  pubs_30d: number
+  bytes_7d: number
+  bytes_30d: number
+  has_retained: boolean
+  last_retained_ts: string | null
+}
+
+export interface InactiveTopic {
+  topic: string
+  last_pub_ts: string | null
+  last_retained_ts: string | null
+  has_retained: boolean
+  active_subs: number
+  status: 'active' | 'inactive'
+}
+
+export interface TopicAuditLog {
+  id: number
+  topic: string
+  ts: string
+  action: string
+  details: any
+  user: string | null
+}
+
+export interface TopicActionRun {
+  id: number
+  topic: string
+  ts: string
+  action: string
+  status: 'success' | 'failed' | 'pending'
+  result: any
+  error: string | null
+}
+
+// RPC Action interfaces
+export interface TopicActionRequest {
+  p_topic: string
+  p_actor: string
+  p_reason: string
+  p_broker: string
+  p_dry_run: boolean
+}
+
+export interface TopicActionResponse {
+  ok: boolean
+  topic: string
+  action: 'archive' | 'unarchive' | 'delete'
+  message?: string
+  error?: string
+}

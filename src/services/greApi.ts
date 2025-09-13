@@ -14,7 +14,13 @@ import {
   ActivityEvent,
   Subscription,
   TopicSubscription,
-  ClientTopicFootprint
+  ClientTopicFootprint,
+  TopicActivity,
+  InactiveTopic,
+  TopicAuditLog,
+  TopicActionRun,
+  TopicActionRequest,
+  TopicActionResponse
 } from '../config/greApi'
 import { 
   Session as ApiSession, 
@@ -1190,6 +1196,170 @@ export class GreApiService {
       console.error(`Error fetching data from ${endpoint}:`, error)
       throw new Error(`Failed to fetch data from ${endpoint}`)
     }
+  }
+
+  // Topic Management Methods
+  
+  // Get topic activity data
+  static async getTopicActivity(): Promise<TopicActivity[]> {
+    try {
+      const response = await greApi.get<TopicActivity[]>('/topic_activity')
+      return response.data
+    } catch (error) {
+      console.error('Error fetching topic activity:', error)
+      throw new Error('Failed to fetch topic activity data')
+    }
+  }
+
+  // Get inactive topics with filtering and pagination
+  static async getInactiveTopics(params?: {
+    order?: string
+    limit?: number
+    offset?: number
+  }): Promise<InactiveTopic[]> {
+    try {
+      const queryParams = new URLSearchParams()
+      if (params?.order) queryParams.append('order', params.order)
+      if (params?.limit) queryParams.append('limit', params.limit.toString())
+      if (params?.offset) queryParams.append('offset', params.offset.toString())
+
+      const response = await greApi.get<InactiveTopic[]>(`/v_inactive_topics?${queryParams.toString()}`)
+      return response.data
+    } catch (error) {
+      console.error('Error fetching inactive topics:', error)
+      throw new Error('Failed to fetch inactive topics data')
+    }
+  }
+
+  // Get topic activity for a specific topic
+  static async getTopicActivityByTopic(topic: string): Promise<TopicActivity[]> {
+    try {
+      const response = await greApi.get<TopicActivity[]>(`/topic_activity?topic=eq.${encodeURIComponent(topic)}&limit=1`)
+      return response.data
+    } catch (error) {
+      console.error(`Error fetching topic activity for ${topic}:`, error)
+      throw new Error(`Failed to fetch topic activity for ${topic}`)
+    }
+  }
+
+  // Get topic audit log for a specific topic
+  static async getTopicAuditLog(topic: string, limit: number = 50): Promise<TopicAuditLog[]> {
+    try {
+      const response = await greApi.get<TopicAuditLog[]>(`/topic_audit_log?topic=eq.${encodeURIComponent(topic)}&order=ts.desc&limit=${limit}`)
+      return response.data
+    } catch (error) {
+      console.error(`Error fetching topic audit log for ${topic}:`, error)
+      throw new Error(`Failed to fetch topic audit log for ${topic}`)
+    }
+  }
+
+  // Get topic action runs for a specific topic
+  static async getTopicActionRuns(topic: string, limit: number = 50): Promise<TopicActionRun[]> {
+    try {
+      const response = await greApi.get<TopicActionRun[]>(`/topic_action_runs?topic=eq.${encodeURIComponent(topic)}&order=ts.desc&limit=${limit}`)
+      return response.data
+    } catch (error) {
+      console.error(`Error fetching topic action runs for ${topic}:`, error)
+      throw new Error(`Failed to fetch topic action runs for ${topic}`)
+    }
+  }
+
+  // RPC Action Methods
+
+  // Archive a topic (quarantine)
+  static async archiveTopic(request: TopicActionRequest): Promise<TopicActionResponse> {
+    try {
+      const response = await greApi.post<TopicActionResponse>('/rpc/api_archive_topic', request)
+      return response.data
+    } catch (error) {
+      console.error(`Error archiving topic ${request.p_topic}:`, error)
+      
+      // Extract detailed error message from API response
+      if (axios.isAxiosError(error) && error.response?.data) {
+        const errorData = error.response.data
+        if (typeof errorData === 'object' && errorData.message) {
+          throw new Error(`Archive failed: ${errorData.message}`)
+        } else if (typeof errorData === 'string') {
+          throw new Error(`Archive failed: ${errorData}`)
+        }
+      }
+      
+      throw new Error(`Failed to archive topic: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  // Unarchive a topic (re-allow)
+  static async unarchiveTopic(request: TopicActionRequest): Promise<TopicActionResponse> {
+    try {
+      const response = await greApi.post<TopicActionResponse>('/rpc/api_unarchive_topic', request)
+      return response.data
+    } catch (error) {
+      console.error(`Error unarchiving topic ${request.p_topic}:`, error)
+      
+      // Extract detailed error message from API response
+      if (axios.isAxiosError(error) && error.response?.data) {
+        const errorData = error.response.data
+        if (typeof errorData === 'object' && errorData.message) {
+          throw new Error(`Unarchive failed: ${errorData.message}`)
+        } else if (typeof errorData === 'string') {
+          throw new Error(`Unarchive failed: ${errorData}`)
+        }
+      }
+      
+      throw new Error(`Failed to unarchive topic: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  // Delete a topic (cleanup)
+  static async deleteTopic(request: TopicActionRequest): Promise<TopicActionResponse> {
+    try {
+      const response = await greApi.post<TopicActionResponse>('/rpc/api_delete_topic', request)
+      return response.data
+    } catch (error) {
+      console.error(`Error deleting topic ${request.p_topic}:`, error)
+      
+      // Extract detailed error message from API response
+      if (axios.isAxiosError(error) && error.response?.data) {
+        const errorData = error.response.data
+        if (typeof errorData === 'object' && errorData.message) {
+          throw new Error(`Delete failed: ${errorData.message}`)
+        } else if (typeof errorData === 'string') {
+          throw new Error(`Delete failed: ${errorData}`)
+        }
+      }
+      
+      throw new Error(`Failed to delete topic: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  // Poll topic action runs until completion
+  static async pollTopicActionRuns(
+    topic: string, 
+    expectedAction: string,
+    timeoutMs: number = 20000,
+    intervalMs: number = 2000
+  ): Promise<TopicActionRun | null> {
+    const startTime = Date.now()
+    
+    while (Date.now() - startTime < timeoutMs) {
+      try {
+        const runs = await this.getTopicActionRuns(topic, 1)
+        if (runs.length > 0) {
+          const latestRun = runs[0]
+          if (latestRun.action === expectedAction && latestRun.status !== 'pending') {
+            return latestRun
+          }
+        }
+        
+        // Wait before next poll
+        await new Promise(resolve => setTimeout(resolve, intervalMs))
+      } catch (error) {
+        console.error('Error polling topic action runs:', error)
+        break
+      }
+    }
+    
+    return null // Timeout reached
   }
 }
 
