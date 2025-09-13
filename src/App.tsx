@@ -5,61 +5,72 @@ import GreDashboard from './pages/GreDashboard'
 import { ApiTablesPage } from './pages/ApiTablesPage'
 import ClientTopicPage from './pages/ClientTopicPage'
 import TopicManagement from './pages/TopicManagement'
+import { ACLPage } from './pages/ACLPage'
+import { ToastProvider } from './components/Toast'
 
 export default function App() {
   return (
-    <Router>
-      <div className="app">
-        {/* Navigation */}
-        <nav className="nav-bar">
-          <div className="nav-container">
-            <div className="nav-brand">
-              <h1>Monitoring Dashboard</h1>
+    <ToastProvider>
+      <Router>
+        <div className="app">
+          {/* Navigation */}
+          <nav className="nav-bar">
+            <div className="nav-container">
+              <div className="nav-brand">
+                <h1>Monitoring Dashboard</h1>
+              </div>
+              <div className="nav-links">
+                <NavLink 
+                  to="/" 
+                  className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
+                >
+                  MQTT Dashboard
+                </NavLink>
+                <NavLink 
+                  to="/gre" 
+                  className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
+                >
+                  GRE
+                </NavLink>
+                <NavLink 
+                  to="/client-topics" 
+                  className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
+                >
+                  Client Topics
+                </NavLink>
+                <NavLink 
+                  to="/api-tables" 
+                  className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
+                >
+                  API Tables
+                </NavLink>
+                <NavLink 
+                  to="/topics" 
+                  className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
+                >
+                  Topic Management
+                </NavLink>
+                <NavLink 
+                  to="/acl" 
+                  className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
+                >
+                  ACL Management
+                </NavLink>
+              </div>
             </div>
-            <div className="nav-links">
-              <NavLink 
-                to="/" 
-                className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
-              >
-                MQTT Dashboard
-              </NavLink>
-              <NavLink 
-                to="/gre" 
-                className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
-              >
-                GRE
-              </NavLink>
-              <NavLink 
-                to="/client-topics" 
-                className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
-              >
-                Client Topics
-              </NavLink>
-              <NavLink 
-                to="/api-tables" 
-                className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
-              >
-                API Tables
-              </NavLink>
-              <NavLink 
-                to="/topics" 
-                className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
-              >
-                Topic Management
-              </NavLink>
-            </div>
-          </div>
-        </nav>
+          </nav>
 
-        {/* Routes */}
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/gre" element={<GreDashboard />} />
-          <Route path="/client-topics" element={<ClientTopicPage />} />
-          <Route path="/api-tables" element={<ApiTablesPage />} />
-          <Route path="/topics" element={<TopicManagement />} />
-        </Routes>
-      </div>
-    </Router>
+          {/* Routes */}
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/gre" element={<GreDashboard />} />
+            <Route path="/client-topics" element={<ClientTopicPage />} />
+            <Route path="/api-tables" element={<ApiTablesPage />} />
+            <Route path="/topics" element={<TopicManagement />} />
+            <Route path="/acl" element={<ACLPage />} />
+          </Routes>
+        </div>
+      </Router>
+    </ToastProvider>
   )
 }
