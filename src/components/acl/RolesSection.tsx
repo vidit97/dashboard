@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react'
 import { ACLApiService } from '../../services/aclApi'
 import { ProcessedRole } from '../../config/aclApi'
 import { RoleDetailPane } from './RoleDetailPane'
+import { BulkRoleDetailPane } from './BulkRoleDetailPane'
 import { CreateRoleModal } from './CreateRoleModal'
 import { useSearch } from '../../pages/ACLPage'
+import { useToast } from '../Toast'
 
 interface RolesSectionProps {
   onRefresh?: () => void
@@ -14,8 +16,10 @@ export const RolesSection: React.FC<RolesSectionProps> = ({ onRefresh }) => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedRole, setSelectedRole] = useState<ProcessedRole | null>(null)
+  const [selectedRoles, setSelectedRoles] = useState(new Set<string>())
   const [showCreateModal, setShowCreateModal] = useState(false)
   const { searchTerm } = useSearch()
+  const { addToast } = useToast()
 
   useEffect(() => {
     loadRoles()
@@ -29,6 +33,14 @@ export const RolesSection: React.FC<RolesSectionProps> = ({ onRefresh }) => {
       if (result.ok && result.data) {
         const processedRoles = ACLApiService.processRoles(result.data)
         setRoles(processedRoles)
+        
+        // Update selectedRole with fresh data if it exists
+        if (selectedRole) {
+          const updatedRole = processedRoles.find(r => r.rolename === selectedRole.rolename)
+          if (updatedRole) {
+            setSelectedRole(updatedRole)
+          }
+        }
       } else {
         setError(result.error?.message || 'Failed to load roles')
       }
@@ -63,6 +75,32 @@ export const RolesSection: React.FC<RolesSectionProps> = ({ onRefresh }) => {
     
     return false
   })
+
+  // Multi-select helper functions (defined after filteredRoles)
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedRoles(new Set(filteredRoles.map(r => r.rolename)))
+    } else {
+      setSelectedRoles(new Set())
+    }
+  }
+
+  const handleSelectRole = (rolename: string, checked: boolean) => {
+    const newSelected = new Set(selectedRoles)
+    if (checked) {
+      newSelected.add(rolename)
+      // Clear single selection when entering multi-select mode
+      setSelectedRole(null)
+    } else {
+      newSelected.delete(rolename)
+    }
+    setSelectedRoles(newSelected)
+  }
+
+  const isAllSelected = filteredRoles.length > 0 && 
+    filteredRoles.every(role => selectedRoles.has(role.rolename))
+  
+  const isIndeterminate = selectedRoles.size > 0 && !isAllSelected
 
   if (loading) {
     return (
@@ -117,7 +155,38 @@ export const RolesSection: React.FC<RolesSectionProps> = ({ onRefresh }) => {
           <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '600' }}>
             Roles ({filteredRoles.length})
           </h2>
-          <div style={{ display: 'flex', gap: '12px' }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            {selectedRoles.size > 0 && (
+              <>
+                <span style={{ 
+                  fontSize: '14px', 
+                  color: '#6b7280',
+                  marginRight: '8px'
+                }}>
+                  {selectedRoles.size} selected
+                </span>
+                <button
+                  onClick={() => setSelectedRoles(new Set())}
+                  style={{
+                    padding: '8px 12px',
+                    background: '#6b7280',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Clear Selection
+                </button>
+                <div style={{ 
+                  width: '1px', 
+                  height: '24px', 
+                  background: '#e5e7eb',
+                  margin: '0 8px' 
+                }} />
+              </>
+            )}
             <button 
               onClick={() => setShowCreateModal(true)}
               style={{
@@ -177,6 +246,23 @@ export const RolesSection: React.FC<RolesSectionProps> = ({ onRefresh }) => {
                   <tr>
                     <th style={{ 
                       padding: '12px 16px', 
+                      textAlign: 'center', 
+                      fontWeight: '600',
+                      color: '#374151',
+                      width: '50px'
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={isAllSelected}
+                        ref={(input) => {
+                          if (input) input.indeterminate = isIndeterminate
+                        }}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </th>
+                    <th style={{ 
+                      padding: '12px 16px', 
                       textAlign: 'left', 
                       fontWeight: '600',
                       color: '#374151'
@@ -205,25 +291,45 @@ export const RolesSection: React.FC<RolesSectionProps> = ({ onRefresh }) => {
                   {filteredRoles.map((role, index) => (
                     <tr 
                       key={role.rolename}
-                      onClick={() => setSelectedRole(role)}
+                      onClick={() => {
+                        // Only allow single selection when no multi-select is active
+                        if (selectedRoles.size === 0) {
+                          setSelectedRole(role)
+                        }
+                      }}
                       style={{
                         borderBottom: '1px solid #f3f4f6',
-                        cursor: 'pointer',
+                        cursor: selectedRoles.size > 0 ? 'default' : 'pointer',
                         background: selectedRole?.rolename === role.rolename ? '#eff6ff' : 
                                    index % 2 === 0 ? 'white' : '#f9fafb'
                       }}
                       onMouseEnter={(e) => {
-                        if (selectedRole?.rolename !== role.rolename) {
+                        if (selectedRole?.rolename !== role.rolename && selectedRoles.size === 0) {
                           e.currentTarget.style.background = '#f3f4f6'
                         }
                       }}
                       onMouseLeave={(e) => {
-                        if (selectedRole?.rolename !== role.rolename) {
+                        if (selectedRole?.rolename !== role.rolename && selectedRoles.size === 0) {
                           e.currentTarget.style.background = index % 2 === 0 ? 'white' : '#f9fafb'
                         }
                       }}
                     >
-                      <td style={{ padding: '12px 16px', fontWeight: '500' }}>
+                      <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedRoles.has(role.rolename)}
+                          onChange={(e) => {
+                            e.stopPropagation() // Prevent row click
+                            handleSelectRole(role.rolename, e.target.checked)
+                          }}
+                          style={{ cursor: 'pointer' }}
+                        />
+                      </td>
+                      <td style={{ 
+                        padding: '12px 16px', 
+                        fontWeight: '500',
+                        color: selectedRoles.size > 0 ? '#9ca3af' : '#000'
+                      }}>
                         {role.rolename}
                       </td>
                       <td style={{ padding: '12px 16px', color: '#6b7280' }}>
@@ -241,12 +347,26 @@ export const RolesSection: React.FC<RolesSectionProps> = ({ onRefresh }) => {
         </div>
       </div>
 
-      {/* Role Detail Pane */}
-      {selectedRole && (
+      {/* Role Detail Pane - only show when single role is selected and no multi-select active */}
+      {selectedRole && selectedRoles.size === 0 && (
         <div style={{ width: '400px' }}>
           <RoleDetailPane 
             role={selectedRole} 
             onClose={() => setSelectedRole(null)}
+            onUpdate={() => {
+              loadRoles()
+              handleRefresh()
+            }}
+          />
+        </div>
+      )}
+
+      {/* Bulk Role Detail Pane - show when multiple roles are selected */}
+      {selectedRoles.size > 0 && (
+        <div style={{ width: '400px' }}>
+          <BulkRoleDetailPane 
+            selectedRoles={Array.from(selectedRoles)}
+            onClose={() => setSelectedRoles(new Set())}
             onUpdate={() => {
               loadRoles()
               handleRefresh()

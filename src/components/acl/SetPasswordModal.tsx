@@ -195,7 +195,7 @@ export const SetPasswordModal: React.FC<SetPasswordModalProps> = ({
         </div>
       </div>
 
-      <style jsx>{`
+      <style jsx="true">{`
         .modal-overlay {
           position: fixed;
           top: 0;

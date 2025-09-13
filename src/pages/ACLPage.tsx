@@ -31,10 +31,10 @@ export const ACLPage: React.FC = () => {
 
   const tabs = [
     { id: 'overview' as ACLTab, label: 'Overview', icon: '📊' },
-    { id: 'roles' as ACLTab, label: 'Roles', icon: '👥' },
-    { id: 'clients' as ACLTab, label: 'Clients', icon: '🔗' },
-    { id: 'backups' as ACLTab, label: 'Backups', icon: '💾' },
-    { id: 'activity' as ACLTab, label: 'Activity', icon: '📝' }
+    { id: 'clients' as ACLTab, label: 'Clients', icon: '�' },
+    { id: 'roles' as ACLTab, label: 'Roles', icon: '�' },
+    { id: 'activity' as ACLTab, label: 'Activity', icon: '�' },
+    { id: 'backups' as ACLTab, label: 'Backups', icon: '�' }
   ]
 
   const renderContent = () => {

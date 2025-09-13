@@ -63,6 +63,13 @@ export const RoleDetailPane: React.FC<RoleDetailPaneProps> = ({ role, onClose, o
           if (result.data?.queued) {
             const queueId = result.data.queue_id
             if (queueId) {
+              // Show initial queued message
+              addToast({
+                type: 'info',
+                title: 'Processing...',
+                message: `Queuing ACL addition: ${getACLTypeDisplayName(newACL.acltype)} ${newACL.allow ? 'allow' : 'deny'} "${newACL.topic}"...`
+              })
+
               const pollResult = await ACLApiService.pollQueueStatus(queueId, 20, 1500)
               if (pollResult.ok) {
                 // Check if idempotent or applied
@@ -83,7 +90,7 @@ export const RoleDetailPane: React.FC<RoleDetailPaneProps> = ({ role, onClose, o
                 } else {
                   addToast({
                     type: 'success',
-                    title: 'Applied',
+                    title: 'ACL Added Successfully',
                     message: `ACL added: ${getACLTypeDisplayName(newACL.acltype)} ${newACL.allow ? 'allow' : 'deny'} "${newACL.topic}"`,
                     queueId: queueId.toString()
                   })
@@ -143,6 +150,13 @@ export const RoleDetailPane: React.FC<RoleDetailPaneProps> = ({ role, onClose, o
       if (result.ok && result.data?.queued) {
         const queueId = result.data.queue_id
         if (queueId) {
+          // Show initial queued message
+          addToast({
+            type: 'info',
+            title: 'Processing...',
+            message: `Queuing ACL removal: ${getACLTypeDisplayName(acl.acltype)} for "${acl.topic}"...`
+          })
+
           const pollResult = await ACLApiService.pollQueueStatus(queueId, 20, 1500)
           if (pollResult.ok) {
             // Check if idempotent or applied
@@ -163,7 +177,7 @@ export const RoleDetailPane: React.FC<RoleDetailPaneProps> = ({ role, onClose, o
             } else {
               addToast({
                 type: 'success',
-                title: 'Applied',
+                title: 'ACL Removed Successfully',
                 message: `ACL removed: ${getACLTypeDisplayName(acl.acltype)} for "${acl.topic}"`,
                 queueId: queueId.toString()
               })

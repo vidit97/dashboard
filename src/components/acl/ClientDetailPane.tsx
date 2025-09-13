@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { ACLApiService } from '../../services/aclApi'
 import { ProcessedClient, ClientRole, RoleData } from '../../config/aclApi'
 import { SetPasswordModal } from './SetPasswordModal'
+import { useToast } from '../Toast'
 
 interface ClientDetailPaneProps {
   client: ProcessedClient | null
@@ -10,16 +11,17 @@ interface ClientDetailPaneProps {
   onUpdate: () => void
 }
 
-export const ClientDetailPane: React.FC<ClientDetailPaneProps> = ({
+export const ClientDetailPane = ({
   client,
   availableRoles,
   onClose,
   onUpdate
 }) => {
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState(null)
   const [newRole, setNewRole] = useState({ rolename: '', priority: 0 })
   const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const { addToast } = useToast()
 
   if (!client) return null
 
@@ -28,20 +30,30 @@ export const ClientDetailPane: React.FC<ClientDetailPaneProps> = ({
       setLoading(true)
       setError(null)
 
-      const operation = client.status === 'enabled' 
-        ? ACLApiService.disableClient 
-        : ACLApiService.enableClient
-
-      const result = await operation(client.username)
+      const result = client.status === 'enabled' 
+        ? await ACLApiService.disableClient(client.username)
+        : await ACLApiService.enableClient(client.username)
       
       if (result.ok && result.data?.queued) {
         const queueId = result.data.queue_id
         if (queueId) {
           const pollResult = await ACLApiService.pollQueueStatus(queueId, 20, 1500)
           if (pollResult.ok) {
-            onUpdate()
+            // Force state refresh after successful operation
+            await ACLApiService.refreshState()
+            // Give time for refresh to complete
+            setTimeout(() => {
+              onUpdate()
+            }, 2000)
+            
+            // Show success message with note about potential delay
+            setError(null)
           } else {
-            setError(pollResult.error?.message || 'Operation failed')
+            if (pollResult.error?.message?.includes('timeout')) {
+              setError('Operation may have succeeded but is taking longer than expected. Please refresh manually.')
+            } else {
+              setError(pollResult.error?.message || 'Operation failed')
+            }
           }
         }
       } else {
@@ -70,19 +82,81 @@ export const ClientDetailPane: React.FC<ClientDetailPaneProps> = ({
       if (result.ok && result.data?.queued) {
         const queueId = result.data.queue_id
         if (queueId) {
+          // Show initial queued message
+          addToast({
+            type: 'info',
+            title: 'Processing...',
+            message: `Queuing role addition for "${newRole.rolename}"...`
+          })
+
           const pollResult = await ACLApiService.pollQueueStatus(queueId, 20, 1500)
           if (pollResult.ok) {
+            // Check if operation was applied or idempotent
+            const auditResult = await ACLApiService.getAuditLog(undefined, queueId)
+            const isIdempotent = auditResult.ok && 
+              auditResult.data?.some(log => log.result_json && 
+                typeof log.result_json === 'object' && 
+                'status' in log.result_json && 
+                log.result_json.status === 'idempotent')
+
+            if (isIdempotent) {
+              addToast({
+                type: 'info',
+                title: 'No Change',
+                message: `Client already has role "${newRole.rolename}" with same priority`,
+                queueId: queueId.toString()
+              })
+            } else {
+              addToast({
+                type: 'success',
+                title: 'Role Added Successfully',
+                message: `Added role "${newRole.rolename}" to client "${client.username}"`,
+                queueId: queueId.toString()
+              })
+            }
+
             setNewRole({ rolename: '', priority: 0 })
-            onUpdate()
+            
+            // Force state refresh and wait before updating UI
+            await ACLApiService.refreshState()
+            setTimeout(() => {
+              onUpdate()
+            }, 2000)
           } else {
+            if (pollResult.error?.message?.includes('timeout')) {
+              addToast({
+                type: 'warning',
+                title: 'Operation Timeout',
+                message: 'Role addition may have succeeded but is taking longer than expected. Please refresh manually.',
+                queueId: queueId.toString()
+              })
+            } else {
+              addToast({
+                type: 'error',
+                title: 'Failed',
+                message: pollResult.error?.message || 'Operation failed',
+                queueId: queueId.toString()
+              })
+            }
             setError(pollResult.error?.message || 'Operation failed')
           }
         }
       } else {
+        addToast({
+          type: 'error',
+          title: 'Failed',
+          message: result.error?.message || 'Failed to add role'
+        })
         setError(result.error?.message || 'Failed to add role')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add role')
+      const errorMsg = err instanceof Error ? err.message : 'Failed to add role'
+      addToast({
+        type: 'error',
+        title: 'Failed',
+        message: errorMsg
+      })
+      setError(errorMsg)
     } finally {
       setLoading(false)
     }
@@ -98,18 +172,62 @@ export const ClientDetailPane: React.FC<ClientDetailPaneProps> = ({
       if (result.ok && result.data?.queued) {
         const queueId = result.data.queue_id
         if (queueId) {
+          // Show initial queued message
+          addToast({
+            type: 'info',
+            title: 'Processing...',
+            message: `Queuing role removal for "${rolename}"...`
+          })
+
           const pollResult = await ACLApiService.pollQueueStatus(queueId, 20, 1500)
           if (pollResult.ok) {
-            onUpdate()
+            addToast({
+              type: 'success',
+              title: 'Role Removed Successfully',
+              message: `Removed role "${rolename}" from client "${client.username}"`,
+              queueId: queueId.toString()
+            })
+
+            // Force state refresh and wait before updating UI
+            await ACLApiService.refreshState()
+            setTimeout(() => {
+              onUpdate()
+            }, 2000)
           } else {
+            if (pollResult.error?.message?.includes('timeout')) {
+              addToast({
+                type: 'warning',
+                title: 'Operation Timeout',
+                message: 'Role removal may have succeeded but is taking longer than expected. Please refresh manually.',
+                queueId: queueId.toString()
+              })
+            } else {
+              addToast({
+                type: 'error',
+                title: 'Failed',
+                message: pollResult.error?.message || 'Operation failed',
+                queueId: queueId.toString()
+              })
+            }
             setError(pollResult.error?.message || 'Operation failed')
           }
         }
       } else {
+        addToast({
+          type: 'error',
+          title: 'Failed',
+          message: result.error?.message || 'Failed to remove role'
+        })
         setError(result.error?.message || 'Failed to remove role')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove role')
+      const errorMsg = err instanceof Error ? err.message : 'Failed to remove role'
+      addToast({
+        type: 'error',
+        title: 'Failed',
+        message: errorMsg
+      })
+      setError(errorMsg)
     } finally {
       setLoading(false)
     }
@@ -119,7 +237,24 @@ export const ClientDetailPane: React.FC<ClientDetailPaneProps> = ({
     <div className="detail-pane">
       <div className="detail-pane-header">
         <h3>{client.username}</h3>
-        <button onClick={onClose} className="close-button">&times;</button>
+        <div className="header-actions">
+          <button 
+            onClick={() => {
+              addToast({
+                type: 'info',
+                title: 'Refreshing',
+                message: 'Refreshing client data...'
+              })
+              onUpdate()
+            }}
+            className="refresh-button"
+            disabled={loading}
+            title="Refresh client data"
+          >
+            🔄
+          </button>
+          <button onClick={onClose} className="close-button">&times;</button>
+        </div>
       </div>
 
       <div className="detail-pane-content">
@@ -267,7 +402,7 @@ export const ClientDetailPane: React.FC<ClientDetailPaneProps> = ({
         }}
       />
 
-      <style jsx>{`
+      <style jsx="true">{`
         .detail-pane {
           background: white;
           border-left: 1px solid #e5e7eb;
@@ -545,6 +680,37 @@ export const ClientDetailPane: React.FC<ClientDetailPaneProps> = ({
           gap: 12px;
           justify-content: flex-end;
           margin-top: 20px;
+        }
+
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .refresh-button {
+          padding: 6px 12px;
+          border: 1px solid #d1d5db;
+          border-radius: 6px;
+          background: white;
+          color: #374151;
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          transition: all 0.2s;
+        }
+
+        .refresh-button:hover {
+          background: #f3f4f6;
+          border-color: #9ca3af;
+        }
+
+        .refresh-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
       `}</style>
     </div>
