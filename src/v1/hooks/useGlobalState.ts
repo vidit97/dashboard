@@ -3,7 +3,7 @@ import { GlobalState, StatusDot } from '../types/common'
 
 const DEFAULT_STATE: GlobalState = {
   broker: 'local',
-  autoRefresh: true,
+  autoRefresh: false,
   refreshInterval: 15, // seconds
   searchTerm: '',
   sidebarOpen: true,

@@ -132,14 +132,17 @@ export const DetailedActivityFeed: React.FC<DetailedActivityFeedProps> = ({
     }))
   }
 
-  // Helper function to calculate ISO8601 timestamp for time range filters
+  // Helper function to calculate timestamp for time range filters using IST
   const getTimeRangeFilter = (timeRange: string): string | null => {
     const selectedRange = TIME_RANGES.find(r => r.value === timeRange)
     if (selectedRange && selectedRange.hours) {
-      const now = Date.now()
-      const hoursAgo = selectedRange.hours * 60 * 60 * 1000
-      const targetTime = now - hoursAgo
-      const timeFilter = new Date(targetTime).toISOString()
+      // Get current time in IST (UTC+5:30)
+      const now = new Date()
+      const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000)) // Add 5.5 hours for IST
+      // Subtract the requested hours
+      const targetTime = new Date(istTime.getTime() - (selectedRange.hours * 60 * 60 * 1000))
+      // Format as YYYY-MM-DDTHH:mm:ss
+      const timeFilter = targetTime.toISOString().slice(0, 19)
       return timeFilter
     }
     return null
