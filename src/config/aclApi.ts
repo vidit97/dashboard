@@ -1,6 +1,6 @@
 // ACL API Configuration
 export const ACL_API_CONFIG = {
-  BASE_URL: 'https://berkeley-funny-booking-rebate.trycloudflare.com',
+  BASE_URL: import.meta.env.VITE_GRE_API_BASE_URL,
   ENDPOINTS: {
     DYN_STATE: '/dyn_state',
     DS_STATE_GET: '/rpc/ds_state_get',
