@@ -1,9 +1,8 @@
 import { useState, useEffect, createContext, useContext } from 'react'
-import { GlobalState, TimeRange, StatusDot } from '../types/common'
+import { GlobalState, StatusDot } from '../types/common'
 
 const DEFAULT_STATE: GlobalState = {
   broker: 'local',
-  timeRange: '24h',
   autoRefresh: true,
   refreshInterval: 15, // seconds
   searchTerm: '',
@@ -14,7 +13,6 @@ const DEFAULT_STATE: GlobalState = {
 interface GlobalStateContextType {
   state: GlobalState
   updateState: (updates: Partial<GlobalState>) => void
-  getTimeRangeMs: () => { from: number; to: number }
   brokerStatus: StatusDot
 }
 
@@ -37,32 +35,6 @@ export const useGlobalStateProvider = () => {
 
   const updateState = (updates: Partial<GlobalState>) => {
     setState(prev => ({ ...prev, ...updates }))
-  }
-
-  const getTimeRangeMs = (): { from: number; to: number } => {
-    const now = Date.now()
-    
-    if (state.timeRange === 'custom' && state.customTimeRange) {
-      return {
-        from: state.customTimeRange.from.getTime(),
-        to: state.customTimeRange.to.getTime()
-      }
-    }
-
-    const ranges = {
-      '15m': 15 * 60 * 1000,
-      '1h': 60 * 60 * 1000,
-      '6h': 6 * 60 * 60 * 1000,
-      '24h': 24 * 60 * 60 * 1000,
-      '7d': 7 * 24 * 60 * 60 * 1000,
-      '30d': 30 * 24 * 60 * 60 * 1000,
-      'custom': 24 * 60 * 60 * 1000 // fallback
-    }
-
-    return {
-      from: now - ranges[state.timeRange],
-      to: now
-    }
   }
 
   // Simulate broker status checks
@@ -91,7 +63,6 @@ export const useGlobalStateProvider = () => {
   return {
     state,
     updateState,
-    getTimeRangeMs,
     brokerStatus,
     GlobalStateContext
   }

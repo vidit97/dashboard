@@ -1,14 +1,6 @@
 // V1 Dashboard Types
-export type TimeRange = 
-  | '15m' | '1h' | '6h' | '24h' | '7d' | '30d' | 'custom'
-
 export interface GlobalState {
   broker: string
-  timeRange: TimeRange
-  customTimeRange?: {
-    from: Date
-    to: Date
-  }
   autoRefresh: boolean
   refreshInterval: number // seconds
   searchTerm: string
@@ -24,7 +16,6 @@ export interface StatusDot {
 export interface TopBarProps {
   brokerStatus: StatusDot
   onBrokerChange: (broker: string) => void
-  onTimeRangeChange: (range: TimeRange) => void
   onSearchChange: (term: string) => void
   onRefreshToggle: (enabled: boolean) => void
   onNowClick: () => void

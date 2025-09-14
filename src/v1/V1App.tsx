@@ -19,7 +19,6 @@ export const V1App: React.FC = () => {
   const { 
     state, 
     updateState, 
-    getTimeRangeMs, 
     brokerStatus, 
     GlobalStateContext 
   } = useGlobalStateProvider()
@@ -84,7 +83,6 @@ export const V1App: React.FC = () => {
     <GlobalStateContext.Provider value={{
       state,
       updateState,
-      getTimeRangeMs,
       brokerStatus
     }}>
       <div className="v1-dashboard">

@@ -1,10 +1,9 @@
-import React, { useState } from 'react'
-import { TopBarProps, TimeRange } from '../types/common'
+import React from 'react'
+import { TopBarProps } from '../types/common'
 
 export const TopBar: React.FC<TopBarProps> = ({
   brokerStatus,
   onBrokerChange,
-  onTimeRangeChange,
   onSearchChange,
   onRefreshToggle,
   onNowClick,
@@ -13,26 +12,6 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOriginalNavbarToggle,
   globalState
 }) => {
-  const [showCustomRange, setShowCustomRange] = useState(false)
-
-  const timeRangeOptions: { value: TimeRange; label: string }[] = [
-    { value: '15m', label: 'Last 15m' },
-    { value: '1h', label: 'Last 1h' },
-    { value: '6h', label: 'Last 6h' },
-    { value: '24h', label: 'Last 24h' },
-    { value: '7d', label: 'Last 7d' },
-    { value: '30d', label: 'Last 30d' },
-    { value: 'custom', label: 'Custom' },
-  ]
-
-  const handleTimeRangeChange = (range: TimeRange) => {
-    onTimeRangeChange(range)
-    if (range === 'custom') {
-      setShowCustomRange(true)
-    } else {
-      setShowCustomRange(false)
-    }
-  }
 
   const getStatusColor = () => {
     switch (brokerStatus.color) {
@@ -103,7 +82,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           </button>
         </div>
 
-        {/* Middle Group - Broker & Time */}
+        {/* Middle Group - Broker */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <label style={{ fontSize: '13px', fontWeight: '500', color: '#374151', whiteSpace: 'nowrap' }}>
@@ -123,29 +102,6 @@ export const TopBar: React.FC<TopBarProps> = ({
               <option value="local">Local</option>
               <option value="production">Production</option>
               <option value="staging">Staging</option>
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label style={{ fontSize: '13px', fontWeight: '500', color: '#374151', whiteSpace: 'nowrap' }}>
-              Time:
-            </label>
-            <select
-              value={globalState.timeRange}
-              onChange={(e) => handleTimeRangeChange(e.target.value as TimeRange)}
-              style={{
-                padding: '4px 8px',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px',
-                fontSize: '13px',
-                background: 'white'
-              }}
-            >
-              {timeRangeOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
             </select>
           </div>
         </div>
@@ -275,45 +231,6 @@ export const TopBar: React.FC<TopBarProps> = ({
           </select>
         </div>
       </div>
-
-      {/* Custom Time Range Inputs */}
-      {showCustomRange && (
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: '8px', 
-          marginTop: '8px',
-          paddingTop: '8px',
-          borderTop: '1px solid #e5e7eb'
-        }}>
-          <span style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>Custom Range:</span>
-          <input
-            type="datetime-local"
-            onChange={(e) => {
-              // Handle custom from time
-            }}
-            style={{
-              padding: '4px 8px',
-              border: '1px solid #d1d5db',
-              borderRadius: '4px',
-              fontSize: '13px'
-            }}
-          />
-          <span style={{ color: '#6b7280', fontSize: '13px' }}>to</span>
-          <input
-            type="datetime-local"
-            onChange={(e) => {
-              // Handle custom to time
-            }}
-            style={{
-              padding: '4px 8px',
-              border: '1px solid #d1d5db',
-              borderRadius: '4px',
-              fontSize: '13px'
-            }}
-          />
-        </div>
-      )}
     </div>
   )
 }

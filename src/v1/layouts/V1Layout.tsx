@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { LeftNavigation } from '../components/LeftNavigation'
 import { TopBar } from '../components/TopBar'
 import { useGlobalState } from '../hooks/useGlobalState'
-import { TimeRange } from '../types/common'
 
 interface V1LayoutProps {
   children: ReactNode
@@ -21,10 +20,6 @@ export const V1Layout: React.FC<V1LayoutProps> = ({ children }) => {
     updateState({ broker })
   }
 
-  const handleTimeRangeChange = (timeRange: TimeRange) => {
-    updateState({ timeRange })
-  }
-
   const handleSearchChange = (searchTerm: string) => {
     updateState({ searchTerm })
   }
@@ -35,7 +30,7 @@ export const V1Layout: React.FC<V1LayoutProps> = ({ children }) => {
 
   const handleNowClick = () => {
     // Force refresh all components to current time
-    updateState({ timeRange: state.timeRange }) // Trigger re-render
+    // This can trigger re-renders for real-time data updates
   }
 
   const handlePageChange = (page: string) => {
@@ -92,7 +87,6 @@ export const V1Layout: React.FC<V1LayoutProps> = ({ children }) => {
         <TopBar
           brokerStatus={brokerStatus}
           onBrokerChange={handleBrokerChange}
-          onTimeRangeChange={handleTimeRangeChange}
           onSearchChange={handleSearchChange}
           onRefreshToggle={handleRefreshToggle}
           onNowClick={handleNowClick}
