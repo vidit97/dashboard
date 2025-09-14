@@ -63,6 +63,27 @@ export const V1App: React.FC = () => {
         .v1-dashboard .page-content {
           padding: 12px !important;
         }
+
+        /* Mobile responsive grids */
+        .v1-dashboard .v1-main-grid {
+          grid-template-columns: 1fr !important;
+          gap: 20px !important;
+        }
+        
+        .v1-dashboard .v1-metrics-grid {
+          grid-template-columns: 1fr !important;
+          gap: 16px !important;
+        }
+        
+        .v1-dashboard .v1-charts-grid {
+          grid-template-columns: 1fr !important;
+          gap: 16px !important;
+        }
+        
+        .v1-dashboard .v1-hero-metrics {
+          grid-template-columns: repeat(2, 1fr) !important;
+          gap: 16px !important;
+        }
       }
       
       /* Tablet breakpoint */
@@ -70,6 +91,24 @@ export const V1App: React.FC = () => {
         .v1-dashboard .top-bar {
           padding: 10px 16px !important;
         }
+        
+        .v1-dashboard .v1-charts-grid {
+          grid-template-columns: repeat(2, 1fr) !important;
+        }
+        
+        .v1-dashboard .v1-metrics-grid {
+          grid-template-columns: repeat(2, 1fr) !important;
+        }
+      }
+      
+      /* Ensure charts are responsive */
+      .v1-dashboard .recharts-wrapper {
+        width: 100% !important;
+        height: auto !important;
+      }
+      
+      .v1-dashboard .recharts-surface {
+        width: 100% !important;
       }
     `
     document.head.appendChild(style)

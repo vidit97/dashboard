@@ -339,19 +339,23 @@ export default function ConnectionsChart({ broker, refreshInterval = 30, autoRef
 
       <div className="chart-container">
         {connectionsData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={400}>
-            <LineChart data={connectionsData}>
+          <ResponsiveContainer width="100%" height={380}>
+            <LineChart data={connectionsData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
                 dataKey="time"
-                tick={{ fontSize: 12 }}
-                interval="preserveStartEnd"
+                tick={{ fontSize: 10 }}
+                interval={Math.max(0, Math.floor(connectionsData.length / 4))}
+                angle={-45}
+                textAnchor="end"
+                height={50}
               />
               <YAxis 
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 10 }}
                 label={{ value: 'Clients', angle: -90, position: 'insideLeft' }}
                 domain={['dataMin - 1', 'dataMax + 1']}
                 allowDataOverflow={false}
+                width={60}
               />
               <Tooltip content={customTooltip} />
               <Legend />
