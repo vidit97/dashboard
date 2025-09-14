@@ -39,16 +39,24 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
   // Load configuration for the table
   const loadConfiguration = async () => {
     try {
+      setLoading(true)
       const tableConfig = await dynamicApiService.getTableConfig(apiType)
       if (tableConfig) {
         setConfig(tableConfig)
         setSelectedColumns(tableConfig.defaultColumns)
+        setError(null)
       } else {
-        setError(`Table configuration not found for: ${apiType}`)
+        setError(`Table "${apiType}" is not accessible or does not exist in your PostgREST API. This may be due to permissions, missing table, or API configuration issues.`)
       }
     } catch (err) {
       console.error('Failed to load table configuration:', err)
-      setError(`Failed to load configuration for table: ${apiType}`)
+      if (err instanceof Error && err.message.includes('fetch')) {
+        setError(`Unable to connect to the API server. Please check if your PostgREST service is running and accessible.`)
+      } else {
+        setError(`Failed to load configuration for table: ${apiType}. ${err instanceof Error ? err.message : 'Unknown error'}`)
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -115,7 +123,24 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
         setSelectedColumns(updatedConfig.defaultColumns)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load data')
+      console.error('Error loading table data:', err)
+      
+      // Provide specific error messages for different types of failures
+      if (err instanceof Error) {
+        if (err.message.includes('404') || err.message.includes('Not Found')) {
+          setError(`Table "${apiType}" not found. It may have been removed or is not accessible with current permissions.`)
+        } else if (err.message.includes('403') || err.message.includes('Forbidden')) {
+          setError(`Access denied to table "${apiType}". Please check your permissions.`)
+        } else if (err.message.includes('500') || err.message.includes('Internal Server Error')) {
+          setError(`Server error when accessing table "${apiType}". Please contact your administrator.`)
+        } else if (err.message.includes('fetch')) {
+          setError(`Unable to connect to the API server. Please check if the PostgREST service is running.`)
+        } else {
+          setError(`Failed to load data from table "${apiType}": ${err.message}`)
+        }
+      } else {
+        setError(`Failed to load data from table "${apiType}". Please try again.`)
+      }
     } finally {
       setLoading(false)
     }
@@ -302,13 +327,35 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
   }
 
   if (error) {
+    const handleRetry = async () => {
+      // Clear validation cache to retry inaccessible tables
+      dynamicApiService.clearValidationCache()
+      await loadConfiguration()
+    }
+
     return (
       <div className="api-table-error">
         <h3>Error loading {config?.displayName || apiType}</h3>
         <p>{error}</p>
-        <button onClick={() => loadConfiguration()} className="btn-primary">
-          Retry
-        </button>
+        <div className="error-actions">
+          <button onClick={handleRetry} className="btn-primary">
+            Retry Configuration
+          </button>
+          {config && (
+            <button onClick={() => loadData()} className="btn-secondary">
+              Retry Data Load
+            </button>
+          )}
+        </div>
+        <details className="error-details">
+          <summary>Troubleshooting Tips</summary>
+          <ul>
+            <li>Check if the PostgREST service is running and accessible</li>
+            <li>Verify table permissions in your database</li>
+            <li>Ensure the table exists and is exposed via PostgREST</li>
+            <li>Check the browser console for detailed error messages</li>
+          </ul>
+        </details>
       </div>
     )
   }
@@ -796,6 +843,67 @@ const apiTableStyles = `
 .api-table-error p {
   color: #6c757d;
   margin-bottom: 20px;
+}
+
+.error-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.error-actions .btn-primary {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.error-actions .btn-primary:hover {
+  background: #c82333;
+}
+
+.error-actions .btn-secondary {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.error-actions .btn-secondary:hover {
+  background: #5a6268;
+}
+
+.error-details {
+  margin-top: 20px;
+  text-align: left;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.error-details summary {
+  cursor: pointer;
+  color: #007bff;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.error-details ul {
+  margin: 10px 0;
+  padding-left: 20px;
+}
+
+.error-details li {
+  margin: 5px 0;
+  color: #6c757d;
+  font-size: 14px;
 }
 
 .api-table-filters {

@@ -2,6 +2,61 @@ import { useState, useEffect } from 'react'
 import { ApiTable } from '../components/ApiTable'
 import { dynamicApiService } from '../services/dynamicApiService'
 
+// Debug component to show validation status
+const DebugInfo = () => {
+  const [validationStatus, setValidationStatus] = useState<{validated: string[], invalid: string[]}>({
+    validated: [],
+    invalid: []
+  })
+
+  useEffect(() => {
+    const status = dynamicApiService.getValidationStatus()
+    setValidationStatus(status)
+  }, [])
+
+  return (
+    <div className="debug-info">
+      <div className="debug-section">
+        <h4>✅ Accessible Tables ({validationStatus.validated.length})</h4>
+        <div className="table-list">
+          {validationStatus.validated.length > 0 ? (
+            validationStatus.validated.map(table => (
+              <span key={table} className="table-tag accessible">{table}</span>
+            ))
+          ) : (
+            <p>No tables validated yet</p>
+          )}
+        </div>
+      </div>
+      
+      <div className="debug-section">
+        <h4>❌ Inaccessible Tables ({validationStatus.invalid.length})</h4>
+        <div className="table-list">
+          {validationStatus.invalid.length > 0 ? (
+            validationStatus.invalid.map(table => (
+              <span key={table} className="table-tag inaccessible">{table}</span>
+            ))
+          ) : (
+            <p>No failed validations</p>
+          )}
+        </div>
+      </div>
+      
+      <div className="debug-actions">
+        <button 
+          onClick={() => {
+            dynamicApiService.clearValidationCache()
+            window.location.reload()
+          }}
+          className="btn-clear-cache"
+        >
+          Clear Cache & Reload
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export const ApiTablesPage = () => {
   const [activeCategory, setActiveCategory] = useState('')
   const [activeTab, setActiveTab] = useState('')
@@ -9,6 +64,7 @@ export const ApiTablesPage = () => {
   const [totalTableCount, setTotalTableCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showDebugInfo, setShowDebugInfo] = useState(false)
 
   // Load dynamic table categories
   const loadTableCategories = async () => {
@@ -91,7 +147,24 @@ export const ApiTablesPage = () => {
         >
           🔄 Refresh Tables
         </button>
+        <button 
+          onClick={() => setShowDebugInfo(!showDebugInfo)} 
+          className="btn-debug"
+          title="Show debug information"
+        >
+          🐛 Debug
+        </button>
       </div>
+
+      {/* Debug Information */}
+      {showDebugInfo && (
+        <div className="debug-panel">
+          <h3>Debug Information</h3>
+          <div className="debug-content">
+            <DebugInfo />
+          </div>
+        </div>
+      )}
 
       {/* Category Selector */}
       <div className="category-tabs">
@@ -164,7 +237,7 @@ const apiTablesPageStyles = `
 .btn-refresh {
   position: absolute;
   top: 0;
-  right: 0;
+  right: 60px;
   padding: 8px 16px;
   background: #007bff;
   color: white;
@@ -177,6 +250,93 @@ const apiTablesPageStyles = `
 
 .btn-refresh:hover {
   background: #0056b3;
+}
+
+.btn-debug {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 8px 16px;
+  background: #ffc107;
+  color: #212529;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-debug:hover {
+  background: #e0a800;
+}
+
+.debug-panel {
+  background: #f8f9fa;
+  border: 1px solid #e1e5e9;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.debug-panel h3 {
+  margin-top: 0;
+  color: #495057;
+}
+
+.debug-info {
+  display: grid;
+  gap: 16px;
+}
+
+.debug-section h4 {
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.table-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.table-tag {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.table-tag.accessible {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.table-tag.inaccessible {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.debug-actions {
+  margin-top: 16px;
+}
+
+.btn-clear-cache {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-clear-cache:hover {
+  background: #c82333;
 }
 
 .error-message {

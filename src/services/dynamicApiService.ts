@@ -1,17 +1,48 @@
 import { ApiTableConfig, API_CONFIGS } from '../types/api'
 import { schemaService, TableSchema, DynamicApiConfig } from './schemaService'
+import { GreApiService } from './greApi'
 
 interface DynamicApiService {
   getTableConfig(tableName: string): Promise<ApiTableConfig | null>
   getAllTableConfigs(): Promise<Record<string, ApiTableConfig>>
   refreshSchemas(): Promise<void>
   discoverNewTables(): Promise<string[]>
+  validateTableAccess(tableName: string): Promise<boolean>
 }
 
 class DynamicApiConfigService implements DynamicApiService {
   private dynamicConfigs: Map<string, ApiTableConfig> = new Map()
   private lastDiscovery: number = 0
   private discoveryTimeout: number = 10 * 60 * 1000 // 10 minutes
+  private validatedTables: Set<string> = new Set()
+  private invalidTables: Set<string> = new Set()
+
+  /**
+   * Validate if a table is accessible via API
+   */
+  async validateTableAccess(tableName: string): Promise<boolean> {
+    // Check cache first
+    if (this.validatedTables.has(tableName)) return true
+    if (this.invalidTables.has(tableName)) return false
+
+    try {
+      // Try to fetch a minimal amount of data from the table
+      const response = await GreApiService.getTableDataPaginated(`/${tableName}`, {
+        offset: 0,
+        limit: 1
+      })
+      
+      // If we get here without error, the table is accessible
+      this.validatedTables.add(tableName)
+      this.invalidTables.delete(tableName)
+      return true
+    } catch (error) {
+      console.warn(`Table ${tableName} is not accessible:`, error)
+      this.invalidTables.add(tableName)
+      this.validatedTables.delete(tableName)
+      return false
+    }
+  }
 
   /**
    * Get configuration for a specific table (static or dynamic)
@@ -28,7 +59,13 @@ class DynamicApiConfigService implements DynamicApiService {
         return this.dynamicConfigs.get(tableName)!
       }
 
-      // Try to discover this table dynamically
+      // Try to discover this table dynamically, but validate access first
+      const isAccessible = await this.validateTableAccess(tableName)
+      if (!isAccessible) {
+        console.warn(`Table ${tableName} is not accessible, skipping configuration`)
+        return null
+      }
+
       const tableSchema = await schemaService.getTableSchema(tableName)
       if (tableSchema) {
         const dynamicConfig = this.createDynamicConfig(tableSchema)
@@ -40,9 +77,7 @@ class DynamicApiConfigService implements DynamicApiService {
       return null
     } catch (error) {
       console.error(`Error getting table config for ${tableName}:`, error)
-      
-      // Fallback: create a basic config if we can't get schema info
-      return this.createFallbackConfig(tableName)
+      return null // Don't create fallback configs for inaccessible tables
     }
   }
 
@@ -109,16 +144,25 @@ class DynamicApiConfigService implements DynamicApiService {
       // Clear existing dynamic configs
       this.dynamicConfigs.clear()
       
-      // Create configs for new tables
-      tableSchemas
-        .filter(schema => newTables.includes(schema.name))
-        .forEach(schema => {
-          const config = this.createDynamicConfig(schema)
-          this.dynamicConfigs.set(schema.name, config)
-        })
+      // Filter schemas to only include accessible tables
+      const accessibleSchemas = []
+      for (const schema of tableSchemas.filter(s => newTables.includes(s.name))) {
+        const isAccessible = await this.validateTableAccess(schema.name)
+        if (isAccessible) {
+          accessibleSchemas.push(schema)
+        } else {
+          console.warn(`Skipping inaccessible table: ${schema.name}`)
+        }
+      }
+      
+      // Create configs for accessible tables
+      accessibleSchemas.forEach(schema => {
+        const config = this.createDynamicConfig(schema)
+        this.dynamicConfigs.set(schema.name, config)
+      })
       
       this.lastDiscovery = Date.now()
-      console.log(`Discovered ${this.dynamicConfigs.size} dynamic tables`)
+      console.log(`Discovered ${this.dynamicConfigs.size} accessible dynamic tables (${tableSchemas.length - accessibleSchemas.length} tables skipped due to access issues)`)
     } catch (error) {
       console.error('Failed to discover dynamic tables:', error)
     }
@@ -227,7 +271,27 @@ class DynamicApiConfigService implements DynamicApiService {
   clearCache(): void {
     this.dynamicConfigs.clear()
     this.lastDiscovery = 0
+    this.validatedTables.clear()
+    this.invalidTables.clear()
     schemaService.clearCache()
+  }
+
+  /**
+   * Clear validation cache only (useful for retrying failed tables)
+   */
+  clearValidationCache(): void {
+    this.validatedTables.clear()
+    this.invalidTables.clear()
+  }
+
+  /**
+   * Get validation status for debugging
+   */
+  getValidationStatus(): { validated: string[], invalid: string[] } {
+    return {
+      validated: Array.from(this.validatedTables),
+      invalid: Array.from(this.invalidTables)
+    }
   }
 }
 
