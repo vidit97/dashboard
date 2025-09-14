@@ -33,11 +33,11 @@ const MOCK_CONNECTED_CLIENTS: ConnectedClient[] = [
 ]
 
 export default function ConnectedClients({ className, refreshInterval = 30 }: ConnectedClientsProps) {
-  const [connectedClients, setConnectedClients] = useState(MOCK_CONNECTED_CLIENTS)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [lastUpdated, setLastUpdated] = useState(null)
-  const [useMockData, setUseMockData] = useState(false)
+  const [connectedClients, setConnectedClients] = useState<ConnectedClient[]>(MOCK_CONNECTED_CLIENTS)
+  const [loading, setLoading] = useState<boolean>(true)
+  const [error, setError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [useMockData, setUseMockData] = useState<boolean>(false)
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -45,22 +45,24 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
   const [totalClients, setTotalClients] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
   const [totalActiveClients, setTotalActiveClients] = useState(0) // Unfiltered total count
+  const [totalActiveUsers, setTotalActiveUsers] = useState(0) // Unfiltered unique username count
   
   // Search and filter state for SearchFilterTable
-  const [selectedFilters, setSelectedFilters] = useState({
+  type FilterValues = { client: string[]; username: string[] }
+  const [selectedFilters, setSelectedFilters] = useState<FilterValues>({
     client: [],
     username: []
   })
-  const [availableFilterData, setAvailableFilterData] = useState({
+  const [availableFilterData, setAvailableFilterData] = useState<FilterValues>({
     client: [],
     username: []
   })
   
   // Active sessions from API (using Session type for pagination compatibility)
-  const [activeSessions, setActiveSessions] = useState([])
+  const [activeSessions, setActiveSessions] = useState<Session[]>([])
   
   // All unfiltered active sessions for top users calculation
-  const [allActiveSessions, setAllActiveSessions] = useState([])
+  const [allActiveSessions, setAllActiveSessions] = useState<Session[]>([])
 
   const fetchAvailableFilterData = useCallback(async () => {
     try {
@@ -109,7 +111,10 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
         }
         
         if (selectedFilters.username.length > 0) {
-          filteredData = filteredData.filter(c => selectedFilters.username.includes(c.username))
+          filteredData = filteredData.filter(c => {
+            const uname = c.username || 'Unknown'
+            return selectedFilters.username.includes(uname)
+          })
         }
         
         setConnectedClients(filteredData)
@@ -118,6 +123,8 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
         setTotalPages(1)
         setCurrentPage(1)
         setTotalActiveClients(MOCK_CONNECTED_CLIENTS.length) // Always show total unfiltered count
+        // count unique usernames in mock
+        setTotalActiveUsers([...new Set(MOCK_CONNECTED_CLIENTS.map(c => c.username))].filter(Boolean as any).length)
       } else {
         // First, get total unfiltered count for the "Connected Now" metric
         if (resetData) { // Only fetch total count when resetting data, not during pagination
@@ -130,11 +137,14 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
           
           // Also fetch all unfiltered sessions for top users calculation
           const allSessionsResult = await GreApiService.getSessionsPaginated({
-            limit: 1000, // Get a large number to capture all active sessions
+            limit: 10000, // Get a large number to capture all active sessions
             offset: 0,
             filters: { 'end_ts': 'is.null' } // Only active sessions, no other filters
           })
           setAllActiveSessions(allSessionsResult.data)
+          // compute unique usernames from the fetched sessions
+          const uniqueUsers = new Set(allSessionsResult.data.map(s => s.username).filter(Boolean))
+          setTotalActiveUsers(uniqueUsers.size)
         }
         
         // Build filters for active sessions (end_ts is null)
@@ -147,9 +157,23 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
           filters['client'] = `in.(${selectedFilters.client.join(',')})`
         }
         
-        // Apply tag-based filters for usernames
+        // Apply tag-based filters for usernames, support 'Unknown' -> username is null
         if (selectedFilters.username.length > 0) {
-          filters['username'] = `in.(${selectedFilters.username.join(',')})`
+          const usernameFilters = selectedFilters.username
+          const unknownSelected = usernameFilters.includes('Unknown')
+          const otherNames = usernameFilters.filter((n: string) => n !== 'Unknown')
+
+          if (unknownSelected && otherNames.length === 0) {
+            // only Unknown selected -> match rows where username IS NULL
+            filters['username'] = 'is.null'
+          } else if (unknownSelected && otherNames.length > 0) {
+            // mix of Unknown and specific usernames -> use OR grouping
+            // e.g. or=(username.is.null,username.in.(user1,user2))
+            filters['or'] = `(username.is.null,username.in.(${otherNames.join(',')}))`
+          } else if (otherNames.length > 0) {
+            // only specific usernames
+            filters['username'] = `in.(${otherNames.join(',')})`
+          }
         }
         
         // Fetch paginated active sessions
@@ -227,11 +251,11 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
 
   // Calculate user breakdown for top 5 display using unfiltered data
   const userBreakdownData = useMockData ? connectedClients : allActiveSessions
-  const userBreakdown = userBreakdownData.reduce((acc, client) => {
+  const userBreakdown = userBreakdownData.reduce((acc: Record<string, number>, client: any) => {
     const username = (useMockData ? client.username : client.username) || 'Unknown'
     acc[username] = (acc[username] || 0) + 1
     return acc
-  }, {})
+  }, {} as Record<string, number>)
 
   const topUsers = Object.entries(userBreakdown)
     .sort(([, a], [, b]) => (b as number) - (a as number))
@@ -259,11 +283,11 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
       {/* KPI Card - Total Active Sessions (Unfiltered) */}
       <div style={{ marginBottom: '24px' }}>
         <MetricCard
-          label="Connected Now"
-          value={totalActiveClients.toString()}
+          label="Connected Users"
+          value={totalActiveUsers.toString()}
           loading={loading}
           color="#10b981"
-          unit="clients"
+          unit="users"
         />
       </div>
 
@@ -320,11 +344,11 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
         pageSize={pageSize}
         columns={[
           { key: 'client', label: 'Client ID' },
-          { key: 'username', label: 'Username', render: (value) => value || 'Unknown' },
+          { key: 'username', label: 'Username', render: (value: any) => value || 'Unknown' },
           { 
             key: 'start_ts', 
             label: 'Connected Since',
-            render: (value) => {
+            render: (value: any) => {
               if (!value) return 'Unknown'
               const date = new Date(value)
               return `${date.toLocaleDateString()}, ${date.toLocaleTimeString()}`
@@ -333,7 +357,7 @@ export default function ConnectedClients({ className, refreshInterval = 30 }: Co
           { 
             key: 'duration', 
             label: 'Duration',
-            render: (_, row) => {
+            render: (_: any, row: any) => {
               const startTime = useMockData ? row.start_ts : row.start_ts
               if (!startTime) return '0m'
               const duration = Math.floor((Date.now() - new Date(startTime).getTime()) / 60000)
