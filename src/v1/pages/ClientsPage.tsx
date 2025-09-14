@@ -83,13 +83,10 @@ export const ClientsPage: React.FC = () => {
         return {
           id: client?.id || 0,
           client: session.client,
-          username: session.username,
+          // Ensure username is a string to match Client type
+          username: session.username || '',
           first_seen: client?.first_seen || session.start_ts,
           last_seen: client?.last_seen || session.start_ts,
-          cert_cn: client?.cert_cn || null,
-          cert_san: client?.cert_san || null,
-          cert_fingerprint: client?.cert_fingerprint || null,
-          created_at: client?.created_at || session.start_ts,
           session_state: 'open' as const, // All sessions from this query are active
           ip_port: `${session.ip_address || 'N/A'}:${session.port || 'N/A'}`,
           protocol_ver: session.protocol_version || 'N/A',
@@ -203,7 +200,7 @@ export const ClientsPage: React.FC = () => {
   }
 
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+  <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 8px' }}>
       {/* Page Header */}
       <div style={{ marginBottom: '32px' }}>
         <h1 style={{

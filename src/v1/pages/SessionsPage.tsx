@@ -186,7 +186,7 @@ export const SessionsPage: React.FC = () => {
   }
 
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 8px' }}>
       {/* Page Header */}
       <div style={{ marginBottom: '32px' }}>
         <h1 style={{

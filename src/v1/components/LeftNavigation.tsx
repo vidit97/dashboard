@@ -25,7 +25,7 @@ export const LeftNavigation: React.FC<LeftNavProps> = ({ currentPage, onPageChan
       )}
       
       <div style={{
-        width: isMobile ? (isOpen ? '280px' : '0px') : (isOpen ? '260px' : '0px'),
+        width: isMobile ? (isOpen ? '240px' : '0px') : (isOpen ? '220px' : '0px'),
         height: '100vh',
         background: '#f8fafc',
         borderRight: '1px solid #e2e8f0',
@@ -41,10 +41,10 @@ export const LeftNavigation: React.FC<LeftNavProps> = ({ currentPage, onPageChan
       }}>
         {/* Header */}
         <div style={{
-          padding: isOpen ? '20px 24px' : '20px 0px',
+          padding: isOpen ? '16px' : '16px 0px',
           borderBottom: '1px solid #e2e8f0',
           background: 'white',
-          minWidth: isMobile ? '280px' : '260px'
+          minWidth: isMobile ? '240px' : '220px'
         }}>
           <h1 style={{
             fontSize: '20px',
@@ -70,9 +70,9 @@ export const LeftNavigation: React.FC<LeftNavProps> = ({ currentPage, onPageChan
         {/* Navigation Items */}
         <nav style={{ 
           flex: 1, 
-          padding: '16px 0',
+          padding: '12px 0',
           overflowY: 'auto',
-          minWidth: isMobile ? '280px' : '260px'
+          minWidth: isMobile ? '240px' : '220px'
         }}>
           <div style={{
             fontSize: '11px',
@@ -80,7 +80,7 @@ export const LeftNavigation: React.FC<LeftNavProps> = ({ currentPage, onPageChan
             color: '#64748b',
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
-            padding: '0 24px 12px',
+            padding: '0 16px 12px',
             borderBottom: '1px solid #e2e8f0',
             marginBottom: '16px',
             opacity: isOpen ? 1 : 0,
@@ -98,7 +98,7 @@ export const LeftNavigation: React.FC<LeftNavProps> = ({ currentPage, onPageChan
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
-              padding: '12px 24px',
+              padding: '10px 16px',
               color: isActive ? '#3b82f6' : '#64748b',
               textDecoration: 'none',
               fontSize: '14px',
@@ -128,10 +128,10 @@ export const LeftNavigation: React.FC<LeftNavProps> = ({ currentPage, onPageChan
 
         {/* Footer */}
         <div style={{
-          padding: '16px 24px',
+          padding: '12px 16px',
           borderTop: '1px solid #e2e8f0',
           background: 'white',
-          minWidth: isMobile ? '280px' : '260px'
+          minWidth: isMobile ? '240px' : '220px'
         }}>
           <div style={{
             fontSize: '12px',

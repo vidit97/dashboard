@@ -20,10 +20,6 @@ export const V1Layout: React.FC<V1LayoutProps> = ({ children }) => {
     updateState({ broker })
   }
 
-  const handleSearchChange = (searchTerm: string) => {
-    updateState({ searchTerm })
-  }
-
   const handleRefreshToggle = (autoRefresh: boolean) => {
     updateState({ autoRefresh })
   }
@@ -77,17 +73,16 @@ export const V1Layout: React.FC<V1LayoutProps> = ({ children }) => {
       {/* Main Content Area */}
       <div style={{
         flex: 1,
-        marginLeft: isMobile ? '0px' : (state.sidebarOpen ? '260px' : '0px'),
+        marginLeft: '0px',
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '100vh',
-        transition: isMobile ? 'none' : 'margin-left 0.3s ease'
+        height: '100vh',
+        overflow: 'hidden'
       }}>
         {/* Top Bar */}
         <TopBar
           brokerStatus={brokerStatus}
           onBrokerChange={handleBrokerChange}
-          onSearchChange={handleSearchChange}
           onRefreshToggle={handleRefreshToggle}
           onNowClick={handleNowClick}
           onSidebarToggle={handleSidebarToggle}
@@ -99,10 +94,10 @@ export const V1Layout: React.FC<V1LayoutProps> = ({ children }) => {
         {/* Page Content */}
         <div className="page-content" style={{
           flex: 1,
-          padding: isMobile ? '16px' : '24px',
-          overflowY: 'auto',
+          padding: isMobile ? '12px' : '16px',
+          overflow: 'auto',
           background: '#f8fafc',
-          maxWidth: '100vw',
+          width: '100%',
           boxSizing: 'border-box'
         }}>
           {children}

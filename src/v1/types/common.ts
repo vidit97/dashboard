@@ -3,7 +3,6 @@ export interface GlobalState {
   broker: string
   autoRefresh: boolean
   refreshInterval: number // seconds
-  searchTerm: string
   sidebarOpen: boolean
   showOriginalNavbar: boolean
 }
@@ -16,7 +15,6 @@ export interface StatusDot {
 export interface TopBarProps {
   brokerStatus: StatusDot
   onBrokerChange: (broker: string) => void
-  onSearchChange: (term: string) => void
   onRefreshToggle: (enabled: boolean) => void
   onNowClick: () => void
   onSidebarToggle: () => void

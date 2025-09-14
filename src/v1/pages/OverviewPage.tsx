@@ -79,7 +79,7 @@ export const OverviewPage: React.FC = () => {
   }
 
   return (
-    <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '0 20px 40px 20px' }}>
+  <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 12px 32px 12px' }}>
       {/* Hero Status Section */}
       <div style={{
         background: '#1f2937',

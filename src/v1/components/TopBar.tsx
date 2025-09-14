@@ -4,7 +4,6 @@ import { TopBarProps } from '../types/common'
 export const TopBar: React.FC<TopBarProps> = ({
   brokerStatus,
   onBrokerChange,
-  onSearchChange,
   onRefreshToggle,
   onNowClick,
   onSidebarToggle,
@@ -161,42 +160,14 @@ export const TopBar: React.FC<TopBarProps> = ({
         </div>
       </div>
 
-      {/* Bottom Row - Search & Auto-refresh */}
+      {/* Bottom Row - Auto-refresh */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
         gap: '16px',
         flexWrap: 'wrap'
       }}>
-        {/* Search */}
-        <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: '200px', maxWidth: '400px' }}>
-          <div style={{ position: 'relative', width: '100%' }}>
-            <input
-              type="text"
-              placeholder="Search clients, topics, users..."
-              value={globalState.searchTerm}
-              onChange={(e) => onSearchChange(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '6px 12px 6px 32px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '13px',
-                boxSizing: 'border-box'
-              }}
-            />
-            <div style={{
-              position: 'absolute',
-              left: '8px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: '#6b7280',
-              fontSize: '14px'
-            }}>
-              🔍
-            </div>
-          </div>
-        </div>
+        {/* Auto-refresh moved to single row */}
 
         {/* Auto-refresh Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
