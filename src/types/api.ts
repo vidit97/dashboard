@@ -274,6 +274,8 @@ export interface ApiTableConfig {
   displayName: string;
   defaultColumns: string[];
   allColumns: string[];
+  isDynamic?: boolean; // Indicates if this config was generated dynamically
+  schema?: import('../services/schemaService').TableSchema; // Optional schema information
 }
 
 export const API_CONFIGS: Record<string, ApiTableConfig> = {

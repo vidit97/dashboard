@@ -1,36 +1,101 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ApiTable } from '../components/ApiTable'
-import { API_CONFIGS } from '../types/api'
-
-// Group tables by category for better organization
-const TABLE_CATEGORIES = {
-  'Core Data': ['sessions', 'events', 'clients', 'subscriptions', 'wills', 'broker_metrics'],
-  'Time Series': ['pub_minute', 'sub_minute', 'drop_minute']
-}
+import { dynamicApiService } from '../services/dynamicApiService'
 
 export const ApiTablesPage = () => {
-  const [activeCategory, setActiveCategory] = useState('Core Data')
-  const [activeTab, setActiveTab] = useState('sessions')
+  const [activeCategory, setActiveCategory] = useState('')
+  const [activeTab, setActiveTab] = useState('')
+  const [tableCategories, setTableCategories] = useState<Record<string, string[]>>({})
+  const [totalTableCount, setTotalTableCount] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Load dynamic table categories
+  const loadTableCategories = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const categories = await dynamicApiService.getCategorizedTables()
+      const allConfigs = await dynamicApiService.getAllTableConfigs()
+      
+      setTableCategories(categories)
+      setTotalTableCount(Object.keys(allConfigs).length)
+      
+      // Set initial active category and tab
+      const firstCategory = Object.keys(categories)[0]
+      if (firstCategory && categories[firstCategory].length > 0) {
+        setActiveCategory(firstCategory)
+        setActiveTab(categories[firstCategory][0])
+      }
+    } catch (err) {
+      console.error('Failed to load table categories:', err)
+      setError('Failed to load table information')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadTableCategories()
+  }, [])
 
   const handleCategoryChange = (category: string) => {
     setActiveCategory(category)
-    const firstTableInCategory = TABLE_CATEGORIES[category as keyof typeof TABLE_CATEGORIES][0]
-    setActiveTab(firstTableInCategory)
+    const firstTableInCategory = tableCategories[category]?.[0]
+    if (firstTableInCategory) {
+      setActiveTab(firstTableInCategory)
+    }
   }
 
-  const currentCategoryTables = TABLE_CATEGORIES[activeCategory as keyof typeof TABLE_CATEGORIES]
+  const currentCategoryTables = tableCategories[activeCategory] || []
+
+  if (loading) {
+    return (
+      <div className="api-tables-page">
+        <div className="page-header">
+          <h1>API Data Tables</h1>
+          <p>Loading table information...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="api-tables-page">
+        <div className="page-header">
+          <h1>API Data Tables</h1>
+          <div className="error-message">
+            <h3>Error Loading Tables</h3>
+            <p>{error}</p>
+            <button onClick={loadTableCategories} className="btn-primary">
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="api-tables-page">
       <div className="page-header">
         <h1>API Data Tables</h1>
         <p>Browse and analyze all GRE MQTT broker data with pagination and column customization.</p>
-        <p className="table-count">Total: {Object.keys(API_CONFIGS).length} tables available</p>
+        <p className="table-count">Total: {totalTableCount} tables available</p>
+        <button 
+          onClick={loadTableCategories} 
+          className="btn-refresh"
+          title="Refresh table list"
+        >
+          🔄 Refresh Tables
+        </button>
       </div>
 
       {/* Category Selector */}
       <div className="category-tabs">
-        {Object.keys(TABLE_CATEGORIES).map((category) => (
+        {Object.keys(tableCategories).map((category) => (
           <button
             key={category}
             onClick={() => handleCategoryChange(category)}
@@ -38,7 +103,7 @@ export const ApiTablesPage = () => {
           >
             {category}
             <span className="table-count-badge">
-              {TABLE_CATEGORIES[category as keyof typeof TABLE_CATEGORIES].length}
+              {tableCategories[category].length}
             </span>
           </button>
         ))}
@@ -52,13 +117,13 @@ export const ApiTablesPage = () => {
             onClick={() => setActiveTab(key)}
             className={`tab-button ${activeTab === key ? 'active' : ''}`}
           >
-            {API_CONFIGS[key].displayName}
+            {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
           </button>
         ))}
       </div>
 
       <div className="api-table-content">
-        <ApiTable apiType={activeTab as keyof typeof API_CONFIGS} />
+        <ApiTable apiType={activeTab} />
       </div>
     </div>
   )
@@ -74,6 +139,7 @@ const apiTablesPageStyles = `
 .page-header {
   margin-bottom: 32px;
   text-align: center;
+  position: relative;
 }
 
 .page-header h1 {
@@ -93,6 +159,57 @@ const apiTablesPageStyles = `
   font-size: 14px;
   color: #28a745;
   font-weight: 600;
+}
+
+.btn-refresh {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 8px 16px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-refresh:hover {
+  background: #0056b3;
+}
+
+.error-message {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+  text-align: center;
+}
+
+.error-message h3 {
+  color: #856404;
+  margin-bottom: 10px;
+}
+
+.error-message p {
+  color: #856404;
+  margin-bottom: 15px;
+}
+
+.btn-primary {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-primary:hover {
+  background: #0056b3;
 }
 
 /* Category Navigation */

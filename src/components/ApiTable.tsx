@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { GreApiService } from '../services/greApi'
+import { dynamicApiService } from '../services/dynamicApiService'
 import { ColumnSelector } from '../ui/ColumnSelector'
 import { 
   ApiDataType, 
-  API_CONFIGS, 
+  ApiTableConfig,
   Session as ApiSession,
   Event as ApiEvent,
   Client as ApiClient,
@@ -11,38 +12,56 @@ import {
 } from '../types/api'
 
 interface ApiTableProps {
-  apiType: keyof typeof API_CONFIGS
+  apiType: string // Changed from keyof typeof API_CONFIGS to support dynamic tables
 }
 
 export const ApiTable = ({ apiType }: ApiTableProps) => {
-  const config = API_CONFIGS[apiType]
-  const [data, setData] = useState([])
+  const [config, setConfig] = useState<ApiTableConfig | null>(null)
+  const [data, setData] = useState<ApiDataType[]>([])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(0)
   const [pageSize, setPageSize] = useState(20)
   const [totalCount, setTotalCount] = useState(0)
-  const [selectedColumns, setSelectedColumns] = useState(config.defaultColumns)
+  const [selectedColumns, setSelectedColumns] = useState<string[]>([])
   const [showColumnSelector, setShowColumnSelector] = useState(false)
   
   // Filter states
   const [searchClientId, setSearchClientId] = useState('')
   const [selectedUsername, setSelectedUsername] = useState('')
-  const [availableUsernames, setAvailableUsernames] = useState([])
-  const [filters, setFilters] = useState({})
+  const [availableUsernames, setAvailableUsernames] = useState<string[]>([])
+  const [filters, setFilters] = useState<Record<string, string>>({})
   
   // Sorting states
-  const [sortColumn, setSortColumn] = useState(null)
-  const [sortDirection, setSortDirection] = useState('asc')
+  const [sortColumn, setSortColumn] = useState<string | null>(null)
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+
+  // Load configuration for the table
+  const loadConfiguration = async () => {
+    try {
+      const tableConfig = await dynamicApiService.getTableConfig(apiType)
+      if (tableConfig) {
+        setConfig(tableConfig)
+        setSelectedColumns(tableConfig.defaultColumns)
+      } else {
+        setError(`Table configuration not found for: ${apiType}`)
+      }
+    } catch (err) {
+      console.error('Failed to load table configuration:', err)
+      setError(`Failed to load configuration for table: ${apiType}`)
+    }
+  }
 
   const loadData = async (offset = 0, limit = pageSize, applyFilters = true) => {
+    if (!config) return
+    
     setLoading(true)
     setError(null)
     try {
       let result: { data: ApiDataType[], totalCount: number }
       
       // Build filter parameters
-      const filterParams = {}
+      const filterParams: Record<string, string> = {}
       if (applyFilters) {
         if (searchClientId.trim()) {
           filterParams['client'] = `ilike.*${searchClientId.trim()}*`
@@ -81,6 +100,20 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
       
       setData(result.data)
       setTotalCount(result.totalCount)
+      
+      // For tables with fallback configs, discover columns from actual data
+      if (config.isDynamic && config.allColumns.length === 1 && result.data.length > 0) {
+        const discoveredColumns = Object.keys(result.data[0] as any)
+        const updatedConfig = {
+          ...config,
+          allColumns: discoveredColumns,
+          defaultColumns: config.defaultColumns.length === 1 ? 
+            discoveredColumns.slice(0, Math.min(6, discoveredColumns.length)) : 
+            config.defaultColumns
+        }
+        setConfig(updatedConfig)
+        setSelectedColumns(updatedConfig.defaultColumns)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data')
     } finally {
@@ -90,6 +123,8 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
 
   // Load available usernames for dropdown
   const loadAvailableUsernames = async () => {
+    if (!config) return
+    
     try {
       let result
       switch (apiType) {
@@ -113,7 +148,7 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
       
       const usernames = [...new Set(
         result.data
-          .map(item => item.username)
+          .map((item: any) => item.username)
           .filter(username => username !== null && username !== undefined && username !== '')
       )].sort()
       
@@ -123,8 +158,15 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
     }
   }
 
+  // Load configuration on component mount or apiType change
   useEffect(() => {
-    // Reset column selection when switching API types
+    loadConfiguration()
+  }, [apiType])
+
+  useEffect(() => {
+    if (!config) return
+    
+    // Reset column selection when configuration loads
     setSelectedColumns(config.defaultColumns)
     setSearchClientId('')
     setSelectedUsername('')
@@ -136,7 +178,7 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
     
     loadData()
     loadAvailableUsernames()
-  }, [apiType])
+  }, [config])
 
   useEffect(() => {
     loadData()
@@ -178,11 +220,15 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
   }
 
   const handleSelectAll = () => {
-    setSelectedColumns(config.allColumns)
+    if (config) {
+      setSelectedColumns(config.allColumns)
+    }
   }
 
   const handleSelectDefault = () => {
-    setSelectedColumns(config.defaultColumns)
+    if (config) {
+      setSelectedColumns(config.defaultColumns)
+    }
   }
 
   // Sorting functionality
@@ -246,14 +292,32 @@ export const ApiTable = ({ apiType }: ApiTableProps) => {
   const startIndex = currentPage * pageSize + 1
   const endIndex = Math.min((currentPage + 1) * pageSize, totalCount)
 
+  // Show loading while configuration is being loaded
+  if (!config && !error) {
+    return (
+      <div className="api-table-container">
+        <div className="loading-cell">Loading table configuration...</div>
+      </div>
+    )
+  }
+
   if (error) {
     return (
       <div className="api-table-error">
-        <h3>Error loading {config.displayName}</h3>
+        <h3>Error loading {config?.displayName || apiType}</h3>
         <p>{error}</p>
-        <button onClick={() => loadData()} className="btn-primary">
+        <button onClick={() => loadConfiguration()} className="btn-primary">
           Retry
         </button>
+      </div>
+    )
+  }
+
+  if (!config) {
+    return (
+      <div className="api-table-error">
+        <h3>Configuration not found</h3>
+        <p>Could not load configuration for table: {apiType}</p>
       </div>
     )
   }
