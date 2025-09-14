@@ -1,5 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useGlobalState } from '../hooks/useGlobalState'
+import { GreApiService } from '../../services/greApi'
+import { Subscription } from '../../types/api'
 // Reusing existing components
 import { ActiveSubscriptions } from '../../ui/ActiveSubscriptions'
 import { SubscriptionState } from '../../ui/SubscriptionState'
@@ -7,66 +9,117 @@ import SubscriptionChurn from '../../components/SubscriptionChurn'
 
 export const SubscriptionsPage: React.FC = () => {
   const { state } = useGlobalState()
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
+  const [filteredSubscriptions, setFilteredSubscriptions] = useState<Subscription[]>([])
   const [topicFilter, setTopicFilter] = useState('')
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [qosFilter, setQosFilter] = useState<'all' | '0' | '1' | '2'>('all')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
+  const pageSize = 20
 
-  // Mock subscription data
-  const mockSubscriptions = [
-    {
-      client: 'sensor_001',
-      topic: 'sensors/temperature/+',
-      qos: 1,
-      active: true,
-      last_subscribe_ts: '2024-01-15 09:30:00',
-      last_unsubscribe_ts: null,
-      source: 'device'
-    },
-    {
-      client: 'dashboard_client',
-      topic: 'alerts/#',
-      qos: 2,
-      active: true,
-      last_subscribe_ts: '2024-01-15 10:25:00',
-      last_unsubscribe_ts: null,
-      source: 'application'
-    },
-    {
-      client: 'mobile_app_xyz',
-      topic: 'user/123/notifications',
-      qos: 0,
-      active: false,
-      last_subscribe_ts: '2024-01-15 08:45:00',
-      last_unsubscribe_ts: '2024-01-15 10:20:00',
-      source: 'mobile'
+  // Fetch subscriptions data
+  const fetchSubscriptionsData = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      // Build filters for API call
+      const filters: Record<string, string> = {}
+
+      if (activeFilter === 'active') {
+        filters['active'] = 'eq.true'
+      } else if (activeFilter === 'inactive') {
+        filters['active'] = 'eq.false'
+      }
+
+      if (qosFilter !== 'all') {
+        filters['qos'] = `eq.${qosFilter}`
+      }
+
+      if (topicFilter.trim()) {
+        filters['topic'] = `ilike.*${topicFilter.trim()}*`
+      }
+
+      const result = await GreApiService.getSubscriptionsPaginated({
+        limit: pageSize,
+        offset: currentPage * pageSize,
+        filters,
+        sortColumn: 'created_at',
+        sortDirection: 'desc'
+      })
+
+      setSubscriptions(result.data)
+      setFilteredSubscriptions(result.data)
+      setTotalCount(result.totalCount)
+      setLastUpdated(new Date())
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch subscriptions data'
+      setError(errorMsg)
+      console.error('Error fetching subscriptions data:', err)
+    } finally {
+      setLoading(false)
     }
-  ]
+  }, [activeFilter, qosFilter, topicFilter, currentPage])
 
-  const filteredSubscriptions = mockSubscriptions.filter(sub => {
-    const matchesTopic = topicFilter === '' || sub.topic.toLowerCase().includes(topicFilter.toLowerCase())
-    const matchesActive = activeFilter === 'all' || 
-      (activeFilter === 'active' && sub.active) ||
-      (activeFilter === 'inactive' && !sub.active)
-    const matchesQos = qosFilter === 'all' || sub.qos.toString() === qosFilter
-    return matchesTopic && matchesActive && matchesQos
-  })
+  // Apply client-side filtering (for now, server-side filtering is preferred)
+  useEffect(() => {
+    setFilteredSubscriptions(subscriptions)
+  }, [subscriptions])
+
+  // Fetch data on mount and when filters change
+  useEffect(() => {
+    setCurrentPage(0) // Reset to first page when filters change
+    fetchSubscriptionsData()
+  }, [topicFilter, activeFilter, qosFilter])
+
+  useEffect(() => {
+    fetchSubscriptionsData()
+  }, [currentPage])
+
+  // Set up auto-refresh
+  useEffect(() => {
+    if (state.autoRefresh) {
+      const interval = setInterval(fetchSubscriptionsData, state.refreshInterval * 1000)
+      return () => clearInterval(interval)
+    }
+  }, [fetchSubscriptionsData, state.autoRefresh, state.refreshInterval])
+
+  const totalPages = Math.ceil(totalCount / pageSize)
+  const startIndex = currentPage * pageSize
+
+  const formatTimestamp = (timestamp: string | null) => {
+    if (!timestamp) return '-'
+    return new Date(timestamp).toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    })
+  }
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
       {/* Page Header */}
       <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ 
-          fontSize: '32px', 
-          fontWeight: '700', 
+        <h1 style={{
+          fontSize: '32px',
+          fontWeight: '700',
           color: '#1f2937',
           margin: '0 0 8px 0'
         }}>
           Subscriptions
         </h1>
-        <p style={{ 
-          fontSize: '16px', 
-          color: '#6b7280', 
-          margin: 0 
+        <p style={{
+          fontSize: '16px',
+          color: '#6b7280',
+          margin: 0
         }}>
           Who listens to what - subscription monitoring and analysis
         </p>
@@ -109,12 +162,45 @@ export const SubscriptionsPage: React.FC = () => {
           border: '1px solid #e5e7eb',
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
         }}>
-          <SubscriptionChurn 
+          <SubscriptionChurn
             className="chart-full-width"
             refreshInterval={120}
           />
         </div>
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div style={{
+          background: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: '8px',
+          padding: '16px',
+          marginBottom: '24px'
+        }}>
+          <div style={{ color: '#dc2626', fontWeight: '500', marginBottom: '8px' }}>
+            Error loading subscriptions data
+          </div>
+          <div style={{ color: '#7f1d1d', fontSize: '14px' }}>
+            {error}
+          </div>
+          <button
+            onClick={fetchSubscriptionsData}
+            style={{
+              marginTop: '12px',
+              padding: '8px 16px',
+              background: '#dc2626',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '14px',
+              cursor: 'pointer'
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Subscriptions Table */}
       <div>
@@ -126,10 +212,10 @@ export const SubscriptionsPage: React.FC = () => {
         }}>
           <div style={{ padding: '20px', borderBottom: '1px solid #e5e7eb' }}>
             <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
-              Subscription Details
+              Subscription Details ({totalCount})
             </h2>
           </div>
-          
+
           {/* Filters */}
           <div style={{
             padding: '16px 20px',
@@ -153,8 +239,8 @@ export const SubscriptionsPage: React.FC = () => {
                 minWidth: '250px'
               }}
             />
-            
-            <select 
+
+            <select
               value={activeFilter}
               onChange={(e) => setActiveFilter(e.target.value as 'all' | 'active' | 'inactive')}
               style={{
@@ -168,8 +254,8 @@ export const SubscriptionsPage: React.FC = () => {
               <option value="active">Active Only</option>
               <option value="inactive">Inactive Only</option>
             </select>
-            
-            <select 
+
+            <select
               value={qosFilter}
               onChange={(e) => setQosFilter(e.target.value as 'all' | '0' | '1' | '2')}
               style={{
@@ -186,10 +272,10 @@ export const SubscriptionsPage: React.FC = () => {
             </select>
 
             <div style={{ fontSize: '14px', color: '#6b7280' }}>
-              {filteredSubscriptions.length} subscription{filteredSubscriptions.length !== 1 ? 's' : ''}
+              {totalCount > 0 ? `${startIndex + 1}-${Math.min(startIndex + pageSize, totalCount)} of ${totalCount}` : '0'} subscription{totalCount !== 1 ? 's' : ''}
             </div>
           </div>
-          
+
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
@@ -204,110 +290,152 @@ export const SubscriptionsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredSubscriptions.map((sub, index) => (
-                  <tr 
-                    key={index}
-                    style={{ borderBottom: '1px solid #f1f5f9' }}
-                  >
-                    <td style={{ padding: '16px', fontWeight: '500', color: '#1f2937' }}>
-                      {sub.client}
-                    </td>
-                    <td style={{ 
-                      padding: '16px', 
-                      color: '#1f2937',
-                      fontFamily: 'monospace',
-                      fontSize: '13px',
-                      background: '#f8fafc',
-                      maxWidth: '200px',
-                      wordBreak: 'break-all'
-                    }}>
-                      {sub.topic}
-                    </td>
-                    <td style={{ padding: '16px', textAlign: 'center' }}>
-                      <span style={{
-                        padding: '4px 8px',
-                        borderRadius: '12px',
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        background: sub.qos === 0 ? '#f3f4f6' : sub.qos === 1 ? '#fef3c7' : '#fee2e2',
-                        color: sub.qos === 0 ? '#374151' : sub.qos === 1 ? '#92400e' : '#991b1b'
-                      }}>
-                        QoS {sub.qos}
-                      </span>
-                    </td>
-                    <td style={{ padding: '16px' }}>
-                      <span style={{
-                        padding: '4px 8px',
-                        borderRadius: '12px',
-                        fontSize: '12px',
-                        fontWeight: '500',
-                        background: sub.active ? '#d1fae5' : '#fee2e2',
-                        color: sub.active ? '#065f46' : '#991b1b'
-                      }}>
-                        {sub.active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '16px', color: '#6b7280', fontSize: '14px' }}>
-                      {sub.last_subscribe_ts}
-                    </td>
-                    <td style={{ padding: '16px', color: '#6b7280', fontSize: '14px' }}>
-                      {sub.last_unsubscribe_ts || '-'}
-                    </td>
-                    <td style={{ padding: '16px' }}>
-                      <span style={{
-                        padding: '2px 8px',
-                        borderRadius: '8px',
-                        fontSize: '11px',
-                        fontWeight: '500',
-                        background: '#e0e7ff',
-                        color: '#3730a3'
-                      }}>
-                        {sub.source}
-                      </span>
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} style={{ padding: '32px', textAlign: 'center', color: '#6b7280' }}>
+                      Loading subscriptions...
                     </td>
                   </tr>
-                ))}
+                ) : filteredSubscriptions.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ padding: '32px', textAlign: 'center', color: '#6b7280' }}>
+                      No subscriptions found
+                    </td>
+                  </tr>
+                ) : (
+                  filteredSubscriptions.map((sub) => (
+                    <tr
+                      key={sub.id}
+                      style={{ borderBottom: '1px solid #f1f5f9' }}
+                    >
+                      <td style={{ padding: '16px', fontWeight: '500', color: '#1f2937' }}>
+                        {sub.client}
+                      </td>
+                      <td style={{
+                        padding: '16px',
+                        color: '#1f2937',
+                        fontFamily: 'monospace',
+                        fontSize: '13px',
+                        background: '#f8fafc',
+                        maxWidth: '200px',
+                        wordBreak: 'break-all'
+                      }}>
+                        {sub.topic}
+                      </td>
+                      <td style={{ padding: '16px', textAlign: 'center' }}>
+                        <span style={{
+                          padding: '4px 8px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          background: sub.qos === 0 ? '#f3f4f6' : sub.qos === 1 ? '#fef3c7' : '#fee2e2',
+                          color: sub.qos === 0 ? '#374151' : sub.qos === 1 ? '#92400e' : '#991b1b'
+                        }}>
+                          QoS {sub.qos}
+                        </span>
+                      </td>
+                      <td style={{ padding: '16px' }}>
+                        <span style={{
+                          padding: '4px 8px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          background: sub.active ? '#d1fae5' : '#fee2e2',
+                          color: sub.active ? '#065f46' : '#991b1b'
+                        }}>
+                          {sub.active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '16px', color: '#6b7280', fontSize: '14px' }}>
+                        {formatTimestamp(sub.last_subscribe_ts)}
+                      </td>
+                      <td style={{ padding: '16px', color: '#6b7280', fontSize: '14px' }}>
+                        {formatTimestamp(sub.last_unsubscribe_ts)}
+                      </td>
+                      <td style={{ padding: '16px' }}>
+                        <span style={{
+                          padding: '2px 8px',
+                          borderRadius: '8px',
+                          fontSize: '11px',
+                          fontWeight: '500',
+                          background: '#e0e7ff',
+                          color: '#3730a3'
+                        }}>
+                          {sub.source || 'Unknown'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
-          
+
           {/* Pagination */}
-          <div style={{
-            padding: '16px 20px',
-            borderTop: '1px solid #e5e7eb',
-            display: 'flex',
-            justifyContent: 'between',
-            alignItems: 'center',
-            background: '#f8fafc'
-          }}>
-            <div style={{ fontSize: '14px', color: '#6b7280' }}>
-              Showing {filteredSubscriptions.length} of {mockSubscriptions.length} subscriptions
+          {!loading && totalPages > 1 && (
+            <div style={{
+              padding: '16px 20px',
+              borderTop: '1px solid #e5e7eb',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: '#f8fafc'
+            }}>
+              <div style={{ fontSize: '14px', color: '#6b7280' }}>
+                Showing {startIndex + 1}-{Math.min(startIndex + pageSize, totalCount)} of {totalCount}
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                  disabled={currentPage === 0}
+                  style={{
+                    padding: '6px 12px',
+                    background: currentPage === 0 ? '#f3f4f6' : '#fff',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    cursor: currentPage === 0 ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  Previous
+                </button>
+
+                <span style={{ padding: '6px 12px', fontSize: '14px', color: '#6b7280' }}>
+                  Page {currentPage + 1} of {totalPages}
+                </span>
+
+                <button
+                  onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
+                  disabled={currentPage >= totalPages - 1}
+                  style={{
+                    padding: '6px 12px',
+                    background: currentPage >= totalPages - 1 ? '#f3f4f6' : '#fff',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    cursor: currentPage >= totalPages - 1 ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  Next
+                </button>
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button style={{
-                padding: '6px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '14px',
-                background: 'white',
-                cursor: 'pointer'
-              }}>
-                Previous
-              </button>
-              <button style={{
-                padding: '6px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '14px',
-                background: 'white',
-                cursor: 'pointer'
-              }}>
-                Next
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       </div>
+
+      {/* Last Updated */}
+      {lastUpdated && (
+        <div style={{
+          fontSize: '12px',
+          color: '#6b7280',
+          textAlign: 'center',
+          marginTop: '16px'
+        }}>
+          Last updated: {lastUpdated.toLocaleString()}
+        </div>
+      )}
     </div>
   )
 }

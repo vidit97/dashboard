@@ -81,10 +81,10 @@ export const SessionsPage: React.FC = () => {
           limit: 10000,
           offset: 0,
           filters: {
-            'event_type': 'in.(connected,disconnected)',
-            'event_ts': `gte.${yesterday.toISOString()}`
+            'action': 'in.(connected,disconnected)',
+            'ts': `gte.${yesterday.toISOString()}`
           },
-          sortColumn: 'event_ts',
+          sortColumn: 'ts',
           sortDirection: 'asc'
         })
 
@@ -92,15 +92,15 @@ export const SessionsPage: React.FC = () => {
         const eventsByHour = new Map<string, { connects: number; disconnects: number }>()
 
         eventsResult.data.forEach(event => {
-          const hour = event.event_ts.substring(0, 13) + ':00:00' // Group by hour
+          const hour = event.ts.substring(0, 13) + ':00:00' // Group by hour
           if (!eventsByHour.has(hour)) {
             eventsByHour.set(hour, { connects: 0, disconnects: 0 })
           }
 
           const hourData = eventsByHour.get(hour)!
-          if (event.event_type === 'connected') {
+          if (event.action === 'connected') {
             hourData.connects++
-          } else if (event.event_type === 'disconnected') {
+          } else if (event.action === 'disconnected') {
             hourData.disconnects++
           }
         })
