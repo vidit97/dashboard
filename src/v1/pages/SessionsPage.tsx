@@ -4,7 +4,6 @@ import { GreApiService } from '../../services/greApi'
 import { Session, Event } from '../../types/api'
 // Reusing existing GRE components
 import SessionReliability from '../../components/SessionReliability'
-import RecentSessions from '../../components/RecentSessions'
 import RecentConnectDisconnects from '../../components/RecentConnectDisconnects'
 import ClientGantt from '../../components/ClientGantt'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
@@ -21,6 +20,19 @@ interface SessionChartData {
   net: number
 }
 
+interface TimeRange {
+  label: string
+  hours: number
+  granularityMinutes: number
+}
+
+const TIME_RANGES: TimeRange[] = [
+  { label: '1h', hours: 1, granularityMinutes: 5 },
+  { label: '6h', hours: 6, granularityMinutes: 15 },
+  { label: '24h', hours: 24, granularityMinutes: 60 },
+  { label: '7d', hours: 168, granularityMinutes: 60 }
+]
+
 export const SessionsPage: React.FC = () => {
   const { state } = useGlobalState()
   const [sessions, setSessions] = useState<SessionWithDuration[]>([])
@@ -29,11 +41,16 @@ export const SessionsPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>(TIME_RANGES[2])
 
   // Filter states
   const [openOnly, setOpenOnly] = useState(false)
   const [ipFilter, setIpFilter] = useState('')
   const [protocolFilter, setProtocolFilter] = useState('')
+  const [clientFilter, setClientFilter] = useState('')
+  const [usernameFilter, setUsernameFilter] = useState('')
+  const [sessionTimeRange, setSessionTimeRange] = useState('all') // all, 1h, 24h, 7d
+  const [sessionStatus, setSessionStatus] = useState('all') // all, active, ended
   const [currentPage, setCurrentPage] = useState(0)
   const [pageSize] = useState(20)
 
@@ -72,51 +89,95 @@ export const SessionsPage: React.FC = () => {
 
       setSessions(enhancedSessions)
 
-      // Fetch connection events for chart (last 24 hours)
+      // Fetch connection events for chart based on selected time range
       try {
-        const yesterday = new Date()
-        yesterday.setHours(yesterday.getHours() - 24)
+        const endTime = new Date()
+        const startTime = new Date()
+        startTime.setHours(startTime.getHours() - selectedTimeRange.hours)
 
         const eventsResult = await GreApiService.getEventsPaginated({
           limit: 10000,
           offset: 0,
           filters: {
             'action': 'in.(connected,disconnected)',
-            'ts': `gte.${yesterday.toISOString()}`
+            'ts': `gte.${startTime.toISOString()}`
           },
           sortColumn: 'ts',
           sortDirection: 'asc'
         })
 
-        // Group events by hour for chart
-        const eventsByHour = new Map<string, { connects: number; disconnects: number }>()
+        // Group events by granularity interval
+        const eventsByInterval = new Map<string, { connects: number; disconnects: number }>()
 
         eventsResult.data.forEach(event => {
-          const hour = event.ts.substring(0, 13) + ':00:00' // Group by hour
-          if (!eventsByHour.has(hour)) {
-            eventsByHour.set(hour, { connects: 0, disconnects: 0 })
+          const eventTime = new Date(event.ts)
+          let intervalKey: string
+
+          if (selectedTimeRange.granularityMinutes === 5) {
+            // 5-minute intervals
+            const minutes = Math.floor(eventTime.getMinutes() / 5) * 5
+            eventTime.setMinutes(minutes, 0, 0)
+            intervalKey = eventTime.toISOString()
+          } else if (selectedTimeRange.granularityMinutes === 15) {
+            // 15-minute intervals
+            const minutes = Math.floor(eventTime.getMinutes() / 15) * 15
+            eventTime.setMinutes(minutes, 0, 0)
+            intervalKey = eventTime.toISOString()
+          } else {
+            // 60-minute intervals (hourly)
+            intervalKey = event.ts.substring(0, 13) + ':00:00'
           }
 
-          const hourData = eventsByHour.get(hour)!
+          if (!eventsByInterval.has(intervalKey)) {
+            eventsByInterval.set(intervalKey, { connects: 0, disconnects: 0 })
+          }
+
+          const intervalData = eventsByInterval.get(intervalKey)!
           if (event.action === 'connected') {
-            hourData.connects++
+            intervalData.connects++
           } else if (event.action === 'disconnected') {
-            hourData.disconnects++
+            intervalData.disconnects++
           }
         })
 
-        // Convert to chart data format
-        const chartDataArray: SessionChartData[] = Array.from(eventsByHour.entries())
-          .map(([time, data]) => ({
-            time: new Date(time).toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false
-            }),
-            connects: data.connects,
-            disconnects: data.disconnects,
-            net: data.connects - data.disconnects
-          }))
+        // Convert to chart data format with appropriate time formatting
+        const chartDataArray: SessionChartData[] = Array.from(eventsByInterval.entries())
+          .map(([time, data]) => {
+            const timeObj = new Date(time)
+            let formattedTime: string
+
+            if (selectedTimeRange.hours <= 6) {
+              // Show HH:MM for short ranges
+              formattedTime = timeObj.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+              })
+            } else if (selectedTimeRange.hours <= 24) {
+              // Show HH:MM for 24h range
+              formattedTime = timeObj.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+              })
+            } else {
+              // Show MM/DD HH:MM for 7d range
+              formattedTime = timeObj.toLocaleDateString('en-US', {
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+              }).replace(',', '')
+            }
+
+            return {
+              time: formattedTime,
+              connects: data.connects,
+              disconnects: data.disconnects,
+              net: data.connects - data.disconnects
+            }
+          })
           .sort((a, b) => a.time.localeCompare(b.time))
 
         setChartData(chartDataArray)
@@ -133,12 +194,36 @@ export const SessionsPage: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [selectedTimeRange])
 
   // Filter sessions based on current filters
   useEffect(() => {
     let filtered = sessions
 
+    // Time range filter
+    if (sessionTimeRange !== 'all') {
+      const now = new Date()
+      let hoursBack = 0
+      if (sessionTimeRange === '1h') hoursBack = 1
+      else if (sessionTimeRange === '24h') hoursBack = 24
+      else if (sessionTimeRange === '7d') hoursBack = 168
+
+      if (hoursBack > 0) {
+        const cutoffTime = new Date(now.getTime() - hoursBack * 60 * 60 * 1000)
+        filtered = filtered.filter(session => 
+          new Date(session.start_ts) >= cutoffTime
+        )
+      }
+    }
+
+    // Status filter
+    if (sessionStatus === 'active') {
+      filtered = filtered.filter(session => !session.end_ts)
+    } else if (sessionStatus === 'ended') {
+      filtered = filtered.filter(session => session.end_ts)
+    }
+
+    // Legacy open only filter (kept for backward compatibility)
     if (openOnly) {
       filtered = filtered.filter(session => !session.end_ts)
     }
@@ -155,9 +240,21 @@ export const SessionsPage: React.FC = () => {
       )
     }
 
+    if (clientFilter) {
+      filtered = filtered.filter(session =>
+        session.client && session.client.toLowerCase().includes(clientFilter.toLowerCase())
+      )
+    }
+
+    if (usernameFilter) {
+      filtered = filtered.filter(session =>
+        session.username && session.username.toLowerCase().includes(usernameFilter.toLowerCase())
+      )
+    }
+
     setFilteredSessions(filtered)
     setCurrentPage(0)
-  }, [sessions, openOnly, ipFilter, protocolFilter])
+  }, [sessions, openOnly, ipFilter, protocolFilter, clientFilter, usernameFilter, sessionTimeRange, sessionStatus])
 
   useEffect(() => {
     fetchSessionsData()
@@ -167,7 +264,7 @@ export const SessionsPage: React.FC = () => {
       const interval = setInterval(fetchSessionsData, state.refreshInterval * 1000)
       return () => clearInterval(interval)
     }
-  }, [fetchSessionsData, state.autoRefresh, state.refreshInterval])
+  }, [fetchSessionsData, state.autoRefresh, state.refreshInterval, selectedTimeRange])
 
   const totalPages = Math.ceil(filteredSessions.length / pageSize)
   const startIndex = currentPage * pageSize
@@ -248,14 +345,43 @@ export const SessionsPage: React.FC = () => {
           border: '1px solid #e5e7eb',
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
         }}>
-          <h2 style={{
-            margin: '0 0 16px 0',
-            fontSize: '20px',
-            fontWeight: '600',
-            color: '#1f2937'
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '16px'
           }}>
-            Session Starts/Stops Rate (Last 24h)
-          </h2>
+            <h2 style={{
+              margin: 0,
+              fontSize: '20px',
+              fontWeight: '600',
+              color: '#1f2937'
+            }}>
+              Session Starts/Stops Rate (Last {selectedTimeRange.label})
+            </h2>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {TIME_RANGES.map((range) => (
+                <button
+                  key={range.label}
+                  onClick={() => setSelectedTimeRange(range)}
+                  style={{
+                    padding: '6px 12px',
+                    background: selectedTimeRange.label === range.label ? '#3b82f6' : '#f3f4f6',
+                    color: selectedTimeRange.label === range.label ? 'white' : '#374151',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {range.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {chartData.length > 0 ? (
             <div style={{ height: '300px' }}>
@@ -302,19 +428,14 @@ export const SessionsPage: React.FC = () => {
               justifyContent: 'center',
               color: '#6b7280'
             }}>
-              {loading ? 'Loading chart data...' : 'No connection events found in the last 24 hours'}
+              {loading ? 'Loading chart data...' : `No connection events found in the last ${selectedTimeRange.label}`}
             </div>
           )}
         </div>
       </div>
 
-      {/* Top Row: Session Reliability + Recent Sessions */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))',
-        gap: '24px',
-        marginBottom: '32px'
-      }}>
+      {/* Session Reliability */}
+      <div style={{ marginBottom: '32px' }}>
         <div style={{
           background: 'white',
           borderRadius: '12px',
@@ -323,11 +444,14 @@ export const SessionsPage: React.FC = () => {
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
         }}>
           <SessionReliability 
-            className="chart-half-width"
+            className="chart-full-width"
             refreshInterval={300}
           />
         </div>
+      </div>
 
+      {/* Recent Connects/Disconnects */}
+      <div style={{ marginBottom: '32px' }}>
         <div style={{
           background: 'white',
           borderRadius: '12px',
@@ -335,10 +459,9 @@ export const SessionsPage: React.FC = () => {
           border: '1px solid #e5e7eb',
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
         }}>
-          <RecentSessions 
-            className="chart-half-width"
-            refreshInterval={60}
-            limit={10}
+          <RecentConnectDisconnects 
+            className="chart-full-width"
+            refreshInterval={120}
           />
         </div>
       </div>
@@ -367,15 +490,82 @@ export const SessionsPage: React.FC = () => {
             alignItems: 'center',
             flexWrap: 'wrap'
           }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
-              <input
-                type="checkbox"
-                checked={openOnly}
-                onChange={(e) => setOpenOnly(e.target.checked)}
-              />
-              Open only
-            </label>
+            {/* Time Range Filter */}
+            <select
+              value={sessionTimeRange}
+              onChange={(e) => setSessionTimeRange(e.target.value)}
+              style={{
+                padding: '6px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}
+            >
+              <option value="all">All Time</option>
+              <option value="1h">Last 1 Hour</option>
+              <option value="24h">Last 24 Hours</option>
+              <option value="7d">Last 7 Days</option>
+            </select>
 
+            {/* Status Filter */}
+            <select
+              value={sessionStatus}
+              onChange={(e) => setSessionStatus(e.target.value)}
+              style={{
+                padding: '6px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}
+            >
+              <option value="all">All Sessions</option>
+              <option value="active">Active Only</option>
+              <option value="ended">Ended Only</option>
+            </select>
+
+            {/* Legacy Open Only Checkbox (hidden when status filter is used) */}
+            {sessionStatus === 'all' && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+                <input
+                  type="checkbox"
+                  checked={openOnly}
+                  onChange={(e) => setOpenOnly(e.target.checked)}
+                />
+                Open only
+              </label>
+            )}
+
+            {/* Client ID Filter */}
+            <input
+              type="text"
+              placeholder="Filter by client ID..."
+              value={clientFilter}
+              onChange={(e) => setClientFilter(e.target.value)}
+              style={{
+                padding: '6px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px',
+                minWidth: '150px'
+              }}
+            />
+
+            {/* Username Filter */}
+            <input
+              type="text"
+              placeholder="Filter by username..."
+              value={usernameFilter}
+              onChange={(e) => setUsernameFilter(e.target.value)}
+              style={{
+                padding: '6px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px',
+                minWidth: '150px'
+              }}
+            />
+
+            {/* IP Filter */}
             <input
               type="text"
               placeholder="IP prefix (e.g., 192.168.1)"
@@ -390,6 +580,7 @@ export const SessionsPage: React.FC = () => {
               }}
             />
 
+            {/* Protocol Filter */}
             <select
               value={protocolFilter}
               onChange={(e) => setProtocolFilter(e.target.value)}
@@ -405,6 +596,30 @@ export const SessionsPage: React.FC = () => {
               <option value="3.1.1">MQTT 3.1.1</option>
               <option value="5.0">MQTT 5.0</option>
             </select>
+
+            {/* Clear Filters Button */}
+            <button
+              onClick={() => {
+                setSessionTimeRange('all')
+                setSessionStatus('all')
+                setOpenOnly(false)
+                setClientFilter('')
+                setUsernameFilter('')
+                setIpFilter('')
+                setProtocolFilter('')
+              }}
+              style={{
+                padding: '6px 12px',
+                background: '#f3f4f6',
+                color: '#374151',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px',
+                cursor: 'pointer'
+              }}
+            >
+              Clear Filters
+            </button>
 
             <div style={{ fontSize: '14px', color: '#6b7280' }}>
               {filteredSessions.length} session{filteredSessions.length !== 1 ? 's' : ''} found

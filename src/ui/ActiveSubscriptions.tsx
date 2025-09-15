@@ -44,12 +44,6 @@ export const ActiveSubscriptions = ({ className }: ActiveSubscriptionsProps) => 
       clients: item.clients.length
     }))
 
-  const qosColors = {
-    0: '#10b981', // emerald-500
-    1: '#f59e0b', // amber-500
-    2: '#ef4444'  // red-500
-  }
-
   const qosDescriptions = {
     0: 'At most once',
     1: 'At least once', 
@@ -57,12 +51,10 @@ export const ActiveSubscriptions = ({ className }: ActiveSubscriptionsProps) => 
   }
 
   const getQosBadge = (qos: number) => {
-    const color = qosColors[qos as keyof typeof qosColors] || '#6b7280'
     const description = qosDescriptions[qos as keyof typeof qosDescriptions] || 'Unknown'
     return (
       <span 
-        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-white"
-        style={{ backgroundColor: color }}
+        className={`status-badge status-qos-${qos}`}
         title={description}
       >
         QoS {qos}
@@ -73,45 +65,49 @@ export const ActiveSubscriptions = ({ className }: ActiveSubscriptionsProps) => 
 
   if (loading) {
     return (
-      <div className={`bg-white rounded-lg shadow-sm border p-6 ${className}`}>
-        <div className="animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/4 mb-6"></div>
-          <div className="h-64 bg-gray-200 rounded mb-6"></div>
-          <div className="h-32 bg-gray-200 rounded"></div>
+      <div className={`chart-section ${className}`}>
+        <div className="loading-placeholder">
+          <div className="skeleton-text skeleton-large"></div>
+          <div className="skeleton-text skeleton-medium"></div>
+          <div className="skeleton-chart"></div>
+          <div className="skeleton-table"></div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className={`bg-white rounded-lg shadow-sm border ${className}`}>
+    <div className={`chart-section ${className}`}>
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-200">
-        <div className="flex items-center justify-between">
+      <div className="chart-header">
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
           <div>
-            <h3 className="text-xl font-semibold text-gray-900">Active Subscriptions</h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <h3 className="chart-title">
+              Active Subscriptions
+            </h3>
+            <p className="chart-subtitle">
               Real-time view of active MQTT subscriptions by topic
             </p>
           </div>
-          <div className="chart-controls">
-            <label htmlFor="topN-select" className="sr-only">Show top</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <select
-              id="topN-select"
               value={showTopN}
               onChange={(e) => setShowTopN(Number(e.target.value))}
-              className="select"
+              className="control-select"
             >
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
+              <option value={5}>Top 5</option>
+              <option value={10}>Top 10</option>
+              <option value={20}>Top 20</option>
+              <option value={50}>Top 50</option>
             </select>
             <button
               onClick={fetchData}
               disabled={loading}
-              className="button-secondary"
+              className={`control-button ${loading ? 'disabled' : ''}`}
             >
               {loading ? 'Refreshing...' : 'Refresh'}
             </button>
@@ -120,31 +116,27 @@ export const ActiveSubscriptions = ({ className }: ActiveSubscriptionsProps) => 
       </div>
 
       {/* Content */}
-      <div className="p-6">
+      <div className="chart-content">
         {error && (
-          <div className="mb-6 rounded-md bg-red-50 p-4 border border-red-200">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">Error loading data</h3>
-                <div className="mt-2 text-sm text-red-700">{error}</div>
-              </div>
+          <div className="error-message">
+            <div className="error-icon">
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="error-title">Error loading data</h3>
+              <div className="error-details">{error}</div>
             </div>
           </div>
         )}
 
-  {/* Statistics moved to SubscriptionState to avoid duplication */}
-
         {/* Chart Section */}
-        <div className="mb-8">
-          <h4 className="text-lg font-medium text-gray-900 mb-4">
+        <div style={{ marginBottom: '20px' }}>
+          <h4 className="section-title">
             Subscriptions by Topic (Top {showTopN})
           </h4>
-          <div className="bg-gray-50 rounded-lg p-4" style={{ height: '400px' }}>
+          <div className="chart-container">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -181,45 +173,43 @@ export const ActiveSubscriptions = ({ className }: ActiveSubscriptionsProps) => 
 
         {/* Topic Details Table */}
         <div>
-          <h4 className="text-lg font-medium text-gray-900 mb-4">Topic Details</h4>
-          <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
-            <table className="min-w-full divide-y divide-gray-300">
-              <thead className="bg-gray-50">
+          <h4 className="section-title">
+            Topic Details
+          </h4>
+          <div className="table-container">
+            <table className="data-table">
+              <thead>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Topic
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Active Subscriptions
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Unique Clients
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    QoS Distribution
-                  </th>
+                  <th>Topic</th>
+                  <th>Active Subscriptions</th>
+                  <th>Unique Clients</th>
+                  <th>QoS Distribution</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody>
                 {data.topicBreakdown.slice(0, showTopN).map((topic, index) => (
-                  <tr key={topic.topic} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900 max-w-xs truncate" title={topic.topic}>
+                  <tr key={topic.topic}>
+                    <td>
+                      <div className="topic-name" title={topic.topic}>
                         {topic.topic}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900 font-medium">{topic.count}</div>
+                    <td className="text-center">
+                      <div className="metric-value-small">
+                        {topic.count}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{topic.clients.length}</div>
+                    <td className="text-center">
+                      <div className="text-default">
+                        {topic.clients.length}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex gap-2 flex-wrap">
+                    <td>
+                      <div className="qos-badges">
                         {Object.entries(topic.qos_breakdown).map(([qos, count]) => (
-                          <div key={qos} className="flex items-center space-x-1">
+                          <div key={qos} className="qos-item">
                             {getQosBadge(Number(qos))}
-                            <span className="text-xs text-gray-500">({count})</span>
+                            <span className="qos-count">({count})</span>
                           </div>
                         ))}
                       </div>
@@ -232,12 +222,14 @@ export const ActiveSubscriptions = ({ className }: ActiveSubscriptionsProps) => 
         </div>
 
         {data.topicBreakdown.length === 0 && !loading && !error && (
-          <div className="text-center py-12">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="no-data">
+            <svg className="no-data-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2M4 13h2m13-8V4a1 1 0 00-1-1H7a1 1 0 00-1 1v1" />
             </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No active subscriptions</h3>
-            <p className="mt-1 text-sm text-gray-500">There are currently no active MQTT subscriptions.</p>
+            <h3 className="no-data-title">No active subscriptions</h3>
+            <p className="no-data-text">
+              There are currently no active MQTT subscriptions.
+            </p>
           </div>
         )}
       </div>

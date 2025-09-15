@@ -3,8 +3,6 @@ import { useGlobalState } from '../hooks/useGlobalState'
 import { GreApiService } from '../../services/greApi'
 import { Subscription } from '../../types/api'
 // Reusing existing components
-import { ActiveSubscriptions } from '../../ui/ActiveSubscriptions'
-import { SubscriptionState } from '../../ui/SubscriptionState'
 import SubscriptionChurn from '../../components/SubscriptionChurn'
 
 export const SubscriptionsPage: React.FC = () => {
@@ -12,6 +10,7 @@ export const SubscriptionsPage: React.FC = () => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [filteredSubscriptions, setFilteredSubscriptions] = useState<Subscription[]>([])
   const [topicFilter, setTopicFilter] = useState('')
+  const [clientFilter, setClientFilter] = useState('')
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [qosFilter, setQosFilter] = useState<'all' | '0' | '1' | '2'>('all')
   const [loading, setLoading] = useState(true)
@@ -44,6 +43,10 @@ export const SubscriptionsPage: React.FC = () => {
         filters['topic'] = `ilike.*${topicFilter.trim()}*`
       }
 
+      if (clientFilter.trim()) {
+        filters['client'] = `ilike.*${clientFilter.trim()}*`
+      }
+
       const result = await GreApiService.getSubscriptionsPaginated({
         limit: pageSize,
         offset: currentPage * pageSize,
@@ -63,7 +66,7 @@ export const SubscriptionsPage: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [activeFilter, qosFilter, topicFilter, currentPage])
+  }, [activeFilter, qosFilter, topicFilter, clientFilter, currentPage])
 
   // Apply client-side filtering (for now, server-side filtering is preferred)
   useEffect(() => {
@@ -74,7 +77,7 @@ export const SubscriptionsPage: React.FC = () => {
   useEffect(() => {
     setCurrentPage(0) // Reset to first page when filters change
     fetchSubscriptionsData()
-  }, [topicFilter, activeFilter, qosFilter])
+  }, [topicFilter, clientFilter, activeFilter, qosFilter])
 
   useEffect(() => {
     fetchSubscriptionsData()
@@ -125,33 +128,6 @@ export const SubscriptionsPage: React.FC = () => {
         </p>
       </div>
 
-      {/* Subscription Analytics Row */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))',
-        gap: '24px',
-        marginBottom: '32px'
-      }}>
-        <div style={{
-          background: 'white',
-          borderRadius: '12px',
-          padding: '24px',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
-        }}>
-          <ActiveSubscriptions className="chart-half-width" />
-        </div>
-
-        <div style={{
-          background: 'white',
-          borderRadius: '12px',
-          padding: '24px',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
-        }}>
-          <SubscriptionState className="chart-half-width" />
-        </div>
-      </div>
 
       {/* Subscription Churn Chart */}
       <div style={{ marginBottom: '32px' }}>
@@ -236,7 +212,23 @@ export const SubscriptionsPage: React.FC = () => {
                 border: '1px solid #d1d5db',
                 borderRadius: '6px',
                 fontSize: '14px',
-                minWidth: '250px'
+                minWidth: '200px'
+              }}
+            />
+
+            <input
+              type="text"
+              placeholder="Client ID filter..."
+              value={clientFilter}
+              onChange={(e) => setClientFilter(e.target.value)}
+              style={{
+                padding: '8px 16px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px',
+                minWidth: '200px',
+                background: '#fef3c7',
+                borderColor: '#f59e0b'
               }}
             />
 

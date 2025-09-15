@@ -1,92 +1,168 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import axios from 'axios'
 import { useGlobalState } from '../hooks/useGlobalState'
+import { Event as ApiEvent } from '../../types/api'
 
-interface Event {
-  ts: string
-  action: 'connected' | 'disconnected' | 'subscribe' | 'unsubscribe' | 'publish' | 'drop' | 'will'
-  client: string
-  topic?: string
-  qos?: number
-  retain?: boolean
-  payload_size?: number
-  username?: string
-  broker: string
-}
+// Get API base URL
+const API_BASE_URL = (import.meta as any).env?.VITE_GRE_API_BASE_URL || 'http://localhost:3001'
+
+// Use the ApiEvent type from our API types
+type Event = ApiEvent
 
 export const EventsPage: React.FC = () => {
   const { state } = useGlobalState()
+  const [events, setEvents] = useState<Event[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+
+  // Filter states
   const [actionFilter, setActionFilter] = useState<string>('all')
   const [topicFilter, setTopicFilter] = useState('')
   const [clientFilter, setClientFilter] = useState('')
+  const [usernameFilter, setUsernameFilter] = useState('')
   const [qosFilter, setQosFilter] = useState<string>('all')
   const [retainFilter, setRetainFilter] = useState(false)
+  const [timeRangeFilter, setTimeRangeFilter] = useState<string>('24h')
+
+  // Pagination states
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(50)
+  const [totalItems, setTotalItems] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+
+  // Saved views
   const [savedViews, setSavedViews] = useState<Array<{name: string, filters: any}>>([])
 
-  // Mock events data - in real implementation this would use virtualization for large datasets
-  const mockEvents: Event[] = [
-    {
-      ts: '2024-01-15T10:30:15.123Z',
-      action: 'connected',
-      client: 'sensor_001',
-      username: 'iot_device',
-      broker: 'local'
-    },
-    {
-      ts: '2024-01-15T10:30:12.456Z',
-      action: 'subscribe',
-      client: 'dashboard_client',
-      topic: 'alerts/#',
-      qos: 2,
-      username: 'admin',
-      broker: 'local'
-    },
-    {
-      ts: '2024-01-15T10:30:10.789Z',
-      action: 'publish',
-      client: 'sensor_001',
-      topic: 'sensors/temperature/room1',
-      qos: 1,
-      retain: true,
-      payload_size: 45,
-      username: 'iot_device',
-      broker: 'local'
-    },
-    {
-      ts: '2024-01-15T10:30:08.234Z',
-      action: 'disconnected',
-      client: 'mobile_app_xyz',
-      username: 'user123',
-      broker: 'local'
-    },
-    {
-      ts: '2024-01-15T10:30:05.567Z',
-      action: 'drop',
-      client: 'sensor_002',
-      topic: 'sensors/pressure/room2',
-      qos: 0,
-      payload_size: 32,
-      username: 'iot_device',
-      broker: 'local'
-    }
-  ]
+  // Helper function to calculate timestamp for time range filters
+  const getTimeRangeFilter = (timeRange: string): string | null => {
+    const now = new Date()
+    let hoursAgo: number
 
-  // Filter events
-  const filteredEvents = useMemo(() => {
-    return mockEvents.filter(event => {
-      if (actionFilter !== 'all' && event.action !== actionFilter) return false
-      if (topicFilter && (!event.topic || !event.topic.toLowerCase().includes(topicFilter.toLowerCase()))) return false
-      if (clientFilter && !event.client.toLowerCase().includes(clientFilter.toLowerCase())) return false
-      if (qosFilter !== 'all' && event.qos?.toString() !== qosFilter) return false
-      if (retainFilter && !event.retain) return false
-      return true
-    })
-  }, [actionFilter, topicFilter, clientFilter, qosFilter, retainFilter, mockEvents])
+    switch (timeRange) {
+      case '1h': hoursAgo = 1; break
+      case '6h': hoursAgo = 6; break
+      case '24h': hoursAgo = 24; break
+      case '7d': hoursAgo = 24 * 7; break
+      case '30d': hoursAgo = 24 * 30; break
+      default: return null
+    }
+
+    const targetTime = new Date(now.getTime() - (hoursAgo * 60 * 60 * 1000))
+    return targetTime.toISOString().slice(0, 19)
+  }
+
+  // Fetch events from real API
+  const fetchEvents = useCallback(async (page: number = 1) => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      // Clean the base URL
+      const cleanBaseUrl = API_BASE_URL.replace(/\/$/, '')
+
+      // Build base query parameters
+      const baseParams = new URLSearchParams()
+
+      // Time range filter
+      const timeFilter = getTimeRangeFilter(timeRangeFilter)
+      if (timeFilter) {
+        baseParams.append('ts', `gte.${timeFilter}`)
+      }
+
+      // Action filter
+      if (actionFilter !== 'all') {
+        baseParams.append('action', `eq.${actionFilter}`)
+      }
+
+      // Search filters
+      if (topicFilter.trim()) {
+        baseParams.append('topic', `like.*${topicFilter.trim()}*`)
+      }
+
+      if (clientFilter.trim()) {
+        baseParams.append('client', `like.*${clientFilter.trim()}*`)
+      }
+
+      if (usernameFilter.trim()) {
+        baseParams.append('username', `like.*${usernameFilter.trim()}*`)
+      }
+
+      // QoS filter
+      if (qosFilter !== 'all') {
+        baseParams.append('qos', `eq.${qosFilter}`)
+      }
+
+      // Retain filter
+      if (retainFilter) {
+        baseParams.append('retain', 'eq.true')
+      }
+
+      // Step 1: Get total count
+      const countUrl = `${cleanBaseUrl}/events?${baseParams.toString()}`
+      const countResponse = await axios.get(countUrl, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Prefer': 'count=exact'
+        },
+        timeout: 30000
+      })
+
+      // Extract total count from Content-Range header
+      const contentRange = countResponse.headers['content-range']
+      const totalCount = contentRange ? parseInt(contentRange.split('/')[1] || '0') : 0
+
+      // Step 2: Get actual paginated data
+      const dataParams = new URLSearchParams(baseParams)
+      dataParams.append('offset', ((page - 1) * pageSize).toString())
+      dataParams.append('limit', pageSize.toString())
+      dataParams.append('order', 'ts.desc')
+      dataParams.append('select', 'id,ts,action,client,topic,qos,retain,payload_size,username')
+
+      const dataUrl = `${cleanBaseUrl}/events?${dataParams.toString()}`
+      const dataResponse = await axios.get<Event[]>(dataUrl, {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      })
+
+      const eventData = dataResponse.data
+
+      setEvents(eventData)
+      setTotalItems(totalCount)
+      setTotalPages(Math.ceil(totalCount / pageSize))
+      setCurrentPage(page)
+      setLastUpdated(new Date())
+
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch events'
+      console.error('Error fetching events:', err)
+      if (axios.isAxiosError(err)) {
+        console.error('Axios error details:', {
+          status: err.response?.status,
+          statusText: err.response?.statusText,
+          data: err.response?.data
+        })
+      }
+      setError(`API Error: ${errorMsg}`)
+      setEvents([])
+    } finally {
+      setLoading(false)
+    }
+  }, [actionFilter, topicFilter, clientFilter, usernameFilter, qosFilter, retainFilter, timeRangeFilter, pageSize])
+
+  // Load data on mount and when filters change
+  useEffect(() => {
+    fetchEvents(1)
+  }, [actionFilter, topicFilter, clientFilter, usernameFilter, qosFilter, retainFilter, timeRangeFilter])
 
   // Pagination
-  const totalPages = Math.ceil(filteredEvents.length / pageSize)
-  const paginatedEvents = filteredEvents.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  useEffect(() => {
+    if (currentPage > 1) {
+      fetchEvents(currentPage)
+    }
+  }, [currentPage])
 
   const getActionIcon = (action: string) => {
     const icons = {
@@ -119,42 +195,88 @@ export const EventsPage: React.FC = () => {
     if (filterName) {
       setSavedViews(prev => [...prev, {
         name: filterName,
-        filters: { actionFilter, topicFilter, clientFilter, qosFilter, retainFilter }
+        filters: { actionFilter, topicFilter, clientFilter, usernameFilter, qosFilter, retainFilter, timeRangeFilter }
       }])
     }
   }
 
   const loadSavedView = (view: {name: string, filters: any}) => {
-    setActionFilter(view.filters.actionFilter)
-    setTopicFilter(view.filters.topicFilter)
-    setClientFilter(view.filters.clientFilter)
-    setQosFilter(view.filters.qosFilter)
-    setRetainFilter(view.filters.retainFilter)
+    setActionFilter(view.filters.actionFilter || 'all')
+    setTopicFilter(view.filters.topicFilter || '')
+    setClientFilter(view.filters.clientFilter || '')
+    setUsernameFilter(view.filters.usernameFilter || '')
+    setQosFilter(view.filters.qosFilter || 'all')
+    setRetainFilter(view.filters.retainFilter || false)
+    setTimeRangeFilter(view.filters.timeRangeFilter || '24h')
     setCurrentPage(1)
   }
 
-  const exportToCsv = () => {
-    const csv = [
-      ['Timestamp', 'Action', 'Client', 'Topic', 'QoS', 'Retain', 'Payload Size', 'Username', 'Broker'].join(','),
-      ...filteredEvents.map(event => [
-        event.ts,
-        event.action,
-        event.client,
-        event.topic || '',
-        event.qos || '',
-        event.retain || false,
-        event.payload_size || '',
-        event.username || '',
-        event.broker
-      ].join(','))
-    ].join('\n')
-    
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `events-${new Date().toISOString().split('T')[0]}.csv`
-    a.click()
+  const exportToCsv = async () => {
+    try {
+      // Fetch all events with current filters (no pagination limit)
+      const cleanBaseUrl = API_BASE_URL.replace(/\/$/, '')
+      const baseParams = new URLSearchParams()
+
+      // Apply same filters as the main query
+      const timeFilter = getTimeRangeFilter(timeRangeFilter)
+      if (timeFilter) {
+        baseParams.append('ts', `gte.${timeFilter}`)
+      }
+      if (actionFilter !== 'all') {
+        baseParams.append('action', `eq.${actionFilter}`)
+      }
+      if (topicFilter.trim()) {
+        baseParams.append('topic', `like.*${topicFilter.trim()}*`)
+      }
+      if (clientFilter.trim()) {
+        baseParams.append('client', `like.*${clientFilter.trim()}*`)
+      }
+      if (usernameFilter.trim()) {
+        baseParams.append('username', `like.*${usernameFilter.trim()}*`)
+      }
+      if (qosFilter !== 'all') {
+        baseParams.append('qos', `eq.${qosFilter}`)
+      }
+      if (retainFilter) {
+        baseParams.append('retain', 'eq.true')
+      }
+
+      baseParams.append('order', 'ts.desc')
+      baseParams.append('select', 'id,ts,action,client,topic,qos,retain,payload_size,username')
+
+      const exportUrl = `${cleanBaseUrl}/events?${baseParams.toString()}`
+      const response = await axios.get<Event[]>(exportUrl, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 60000 // Longer timeout for export
+      })
+
+      const allEvents = response.data
+
+      const csv = [
+        ['Timestamp', 'Action', 'Client', 'Topic', 'QoS', 'Retain', 'Payload Size', 'Username'].join(','),
+        ...allEvents.map(event => [
+          event.ts,
+          event.action,
+          event.client || '',
+          event.topic || '',
+          event.qos || '',
+          event.retain || false,
+          event.payload_size || '',
+          event.username || ''
+        ].join(','))
+      ].join('\n')
+
+      const blob = new Blob([csv], { type: 'text/csv' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `events-${new Date().toISOString().split('T')[0]}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Error exporting CSV:', err)
+      alert('Failed to export CSV. Please try again.')
+    }
   }
 
   return (
@@ -192,21 +314,22 @@ export const EventsPage: React.FC = () => {
       }}>
         <button
           onClick={exportToCsv}
+          disabled={loading}
           style={{
             padding: '8px 16px',
-            background: '#10b981',
+            background: loading ? '#9ca3af' : '#10b981',
             color: 'white',
             border: 'none',
             borderRadius: '6px',
             fontSize: '14px',
             fontWeight: '500',
-            cursor: 'pointer',
+            cursor: loading ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: '6px'
           }}
         >
-          📁 Export CSV
+          📁 {loading ? 'Loading...' : 'Export CSV'}
         </button>
         
         <button
@@ -248,8 +371,56 @@ export const EventsPage: React.FC = () => {
           </select>
         )}
 
+        <button
+          onClick={() => fetchEvents(currentPage)}
+          disabled={loading}
+          style={{
+            padding: '8px 16px',
+            background: loading ? '#f9fafb' : '#f3f4f6',
+            color: loading ? '#9ca3af' : '#374151',
+            border: '1px solid #d1d5db',
+            borderRadius: '6px',
+            fontSize: '14px',
+            fontWeight: '500',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          🔄 {loading ? 'Loading...' : 'Refresh'}
+        </button>
+
+        <button
+          onClick={() => {
+            setActionFilter('all')
+            setTopicFilter('')
+            setClientFilter('')
+            setUsernameFilter('')
+            setQosFilter('all')
+            setRetainFilter(false)
+            setTimeRangeFilter('24h')
+            setCurrentPage(1)
+          }}
+          style={{
+            padding: '8px 16px',
+            background: '#f3f4f6',
+            color: '#374151',
+            border: '1px solid #d1d5db',
+            borderRadius: '6px',
+            fontSize: '14px',
+            fontWeight: '500',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          🗑️ Clear Filters
+        </button>
+
         <div style={{ marginLeft: 'auto', fontSize: '14px', color: '#6b7280' }}>
-          {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''} found
+          {totalItems} event{totalItems !== 1 ? 's' : ''} found
         </div>
       </div>
 
@@ -263,7 +434,7 @@ export const EventsPage: React.FC = () => {
       }}>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
           gap: '16px',
           alignItems: 'end'
         }}>
@@ -333,6 +504,25 @@ export const EventsPage: React.FC = () => {
 
           <div>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px', color: '#374151' }}>
+              Username
+            </label>
+            <input
+              type="text"
+              value={usernameFilter}
+              onChange={(e) => setUsernameFilter(e.target.value)}
+              placeholder="Username..."
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px', color: '#374151' }}>
               QoS
             </label>
             <select
@@ -353,6 +543,30 @@ export const EventsPage: React.FC = () => {
             </select>
           </div>
 
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px', color: '#374151' }}>
+              Time Range
+            </label>
+            <select
+              value={timeRangeFilter}
+              onChange={(e) => setTimeRangeFilter(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}
+            >
+              <option value="1h">Last 1 Hour</option>
+              <option value="6h">Last 6 Hours</option>
+              <option value="24h">Last 24 Hours</option>
+              <option value="7d">Last 7 Days</option>
+              <option value="30d">Last 30 Days</option>
+              <option value="all">All Time</option>
+            </select>
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', height: '38px' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
               <input
@@ -366,13 +580,68 @@ export const EventsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Loading State */}
+      {loading && events.length === 0 && (
+        <div style={{
+          background: 'white',
+          borderRadius: '12px',
+          border: '1px solid #e5e7eb',
+          padding: '48px',
+          textAlign: 'center',
+          color: '#6b7280'
+        }}>
+          Loading events...
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div style={{
+          background: 'white',
+          borderRadius: '12px',
+          border: '1px solid #e5e7eb',
+          padding: '24px',
+          marginBottom: '24px'
+        }}>
+          <div style={{
+            background: '#fef2f2',
+            color: '#dc2626',
+            padding: '12px',
+            borderRadius: '8px',
+            border: '1px solid #fecaca',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <span>⚠️</span>
+            <span>{error}</span>
+            <button
+              onClick={() => fetchEvents(1)}
+              style={{
+                marginLeft: 'auto',
+                padding: '4px 8px',
+                background: '#dc2626',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '12px',
+                cursor: 'pointer'
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Events Table */}
-      <div style={{
-        background: 'white',
-        borderRadius: '12px',
-        border: '1px solid #e5e7eb',
-        overflow: 'hidden'
-      }}>
+      {!loading || events.length > 0 ? (
+        <div style={{
+          background: 'white',
+          borderRadius: '12px',
+          border: '1px solid #e5e7eb',
+          overflow: 'hidden'
+        }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -388,7 +657,7 @@ export const EventsPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {paginatedEvents.map((event, index) => (
+              {events.map((event, index) => (
                 <tr 
                   key={index}
                   style={{ 
@@ -450,62 +719,96 @@ export const EventsPage: React.FC = () => {
             </tbody>
           </table>
         </div>
-        
+
+        {/* Empty State */}
+        {events.length === 0 && !loading && !error && (
+          <div style={{
+            padding: '48px',
+            textAlign: 'center',
+            color: '#6b7280'
+          }}>
+            <svg style={{ width: '48px', height: '48px', margin: '0 auto 16px', color: '#d1d5db' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: '500', color: '#374151' }}>
+              No events found
+            </h3>
+            <p style={{ margin: 0, fontSize: '14px' }}>
+              Try adjusting your filters or selecting a different time range.
+            </p>
+          </div>
+        )}
+
         {/* Pagination */}
-        <div style={{
-          padding: '16px 20px',
-          borderTop: '1px solid #e5e7eb',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          background: '#f8fafc'
-        }}>
-          <div style={{ fontSize: '14px', color: '#6b7280' }}>
-            Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, filteredEvents.length)} of {filteredEvents.length} events
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              style={{
+        {events.length > 0 && (
+          <div style={{
+            padding: '16px 20px',
+            borderTop: '1px solid #e5e7eb',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: '#f8fafc'
+          }}>
+            <div style={{ fontSize: '14px', color: '#6b7280' }}>
+              Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalItems)} of {totalItems} events
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  background: currentPage === 1 ? '#f9fafb' : 'white',
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                  color: currentPage === 1 ? '#9ca3af' : '#374151'
+                }}
+              >
+                Previous
+              </button>
+              <span style={{
                 padding: '6px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
                 fontSize: '14px',
-                background: currentPage === 1 ? '#f9fafb' : 'white',
-                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                color: currentPage === 1 ? '#9ca3af' : '#374151'
-              }}
-            >
-              Previous
-            </button>
-            <span style={{ 
-              padding: '6px 12px', 
-              fontSize: '14px', 
-              color: '#374151',
-              display: 'flex',
-              alignItems: 'center'
-            }}>
-              Page {currentPage} of {totalPages}
-            </span>
-            <button
-              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-              style={{
-                padding: '6px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '14px',
-                background: currentPage === totalPages ? '#f9fafb' : 'white',
-                cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                color: currentPage === totalPages ? '#9ca3af' : '#374151'
-              }}
-            >
-              Next
-            </button>
+                color: '#374151',
+                display: 'flex',
+                alignItems: 'center'
+              }}>
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage >= totalPages}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  background: currentPage >= totalPages ? '#f9fafb' : 'white',
+                  cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                  color: currentPage >= totalPages ? '#9ca3af' : '#374151'
+                }}
+              >
+                Next
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
+      ) : null}
+
+      {/* Footer */}
+      {lastUpdated && (
+        <div style={{
+          textAlign: 'center',
+          marginTop: '16px',
+          fontSize: '12px',
+          color: '#9ca3af'
+        }}>
+          Last updated: {lastUpdated.toLocaleString()}
+        </div>
+      )}
     </div>
   )
 }
