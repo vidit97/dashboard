@@ -10,13 +10,19 @@ import { ToastProvider } from './components/Toast'
 import { LeftSidebar } from './components/LeftSidebar'
 import { V1App } from './v1/V1App'
 import { V2App } from './v2/V2App'
+import { LoginPage } from './components/LoginPage'
+import { BrokerSelection } from './components/BrokerSelection'
 import './components/LeftSidebar.css'
 
 const AppContent = () => {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showOriginalNavbar, setShowOriginalNavbar] = useState(false); // Hidden by default
-  
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showBrokerSelection, setShowBrokerSelection] = useState(false);
+  const [username, setUsername] = useState('');
+  const [selectedBroker, setSelectedBroker] = useState('');
+
   const isV1Route = location.pathname.startsWith('/v1');
   const isV2Route = location.pathname.startsWith('/v2');
 
@@ -65,21 +71,55 @@ const AppContent = () => {
     };
   }, []);
 
+  const handleLogin = (user: string) => {
+    setUsername(user)
+    setIsLoggedIn(true)
+    setShowBrokerSelection(true)
+  }
+
+  const handleBrokerSelect = (brokerId: string) => {
+    setSelectedBroker(brokerId)
+    setShowBrokerSelection(false)
+    // Update global state or context with selected broker here if needed
+  }
+
+  const handleLogout = () => {
+    setIsLoggedIn(false)
+    setShowBrokerSelection(false)
+    setUsername('')
+    setSelectedBroker('')
+  }
+
+  // Show login page if not logged in
+  if (!isLoggedIn) {
+    return <LoginPage onLogin={handleLogin} />
+  }
+
+  // Show broker selection if logged in but no broker selected
+  if (showBrokerSelection) {
+    return (
+      <BrokerSelection
+        onBrokerSelect={handleBrokerSelect}
+        onLogout={handleLogout}
+        username={username}
+      />
+    )
+  }
+
   return (
     <div className="app-container">
-      {/* Left Sidebar - only show on non-V1/V2 routes */}
-      {!isV1Route && !isV2Route && <LeftSidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />}
+      {/* Left Sidebar - hidden since we use V2 by default */}
       
       <div className="main-content">
-        {/* Top Navigation - conditionally show based on route and user preference */}
-        {((!isV1Route && !isV2Route) || showOriginalNavbar) && (
+        {/* Top Navigation - only show when on V1 route with showOriginalNavbar */}
+        {(isV1Route && showOriginalNavbar) && (
           <nav className="nav-bar" style={{ 
             position: isV1Route ? 'relative' : undefined,
             zIndex: isV1Route ? 1000 : undefined 
           }}>
             <div className="nav-container">
-              {/* Hamburger menu for sidebar toggle - only on non-V1/V2 routes */}
-              {!isV1Route && !isV2Route && (
+              {/* Hamburger menu for sidebar toggle - only on legacy routes */}
+              {false && (
                 <button 
                   className="hamburger-menu always-visible" 
                   onClick={toggleSidebar}
@@ -110,44 +150,8 @@ const AppContent = () => {
                   {showOriginalNavbar ? "Hide Original Nav" : "Show Original Nav"}
                 </button>
               )}
-              
+
               <div className="nav-links">
-                <NavLink 
-                  to="/" 
-                  className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
-                >
-                  MQTT Dashboard
-                </NavLink>
-                <NavLink 
-                  to="/gre" 
-                  className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
-                >
-                  GRE
-                </NavLink>
-                <NavLink 
-                  to="/client-topics" 
-                  className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
-                >
-                  Client Topics
-                </NavLink>
-                <NavLink 
-                  to="/api-tables" 
-                  className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
-                >
-                  API Tables
-                </NavLink>
-                <NavLink 
-                  to="/topics" 
-                  className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
-                >
-                  Topic Management
-                </NavLink>
-                <NavLink 
-                  to="/acl" 
-                  className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
-                >
-                  ACL Management
-                </NavLink>
                 <NavLink
                   to="/v1"
                   className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
@@ -158,19 +162,7 @@ const AppContent = () => {
                     fontWeight: '600'
                   }}
                 >
-                  🚀 V1 Dashboard
-                </NavLink>
-                <NavLink
-                  to="/v2"
-                  className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
-                  style={{
-                    background: 'linear-gradient(45deg, #10b981, #3b82f6)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    fontWeight: '700'
-                  }}
-                >
-                  ⚡ V2 Dashboard
+                  🚀 V1 Dashboard (Legacy)
                 </NavLink>
               </div>
             </div>
@@ -178,26 +170,25 @@ const AppContent = () => {
         )}
 
         {/* Routes */}
-        {isV2Route ? (
+        {isV1Route ? (
+          // V1 routes - with existing wrapper
+          <div className="page-content" style={{
+            paddingTop: isV1Route && !showOriginalNavbar ? '0' : undefined
+          }}>
+            <Routes>
+              <Route path="/v1/*" element={<V1App />} />
+            </Routes>
+          </div>
+        ) : isV2Route ? (
           // V2 routes - full screen with no wrapper
           <Routes>
             <Route path="/v2/*" element={<V2App />} />
           </Routes>
         ) : (
-          // V1 and legacy routes - with existing wrapper
-          <div className="page-content" style={{
-            paddingTop: isV1Route && !showOriginalNavbar ? '0' : undefined
-          }}>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/gre" element={<GreDashboard />} />
-              <Route path="/client-topics" element={<ClientTopicPage />} />
-              <Route path="/api-tables" element={<ApiTablesPage />} />
-              <Route path="/topics" element={<TopicManagement />} />
-              <Route path="/acl" element={<ACLPage />} />
-              <Route path="/v1/*" element={<V1App />} />
-            </Routes>
-          </div>
+          // Default to V2 dashboard
+          <Routes>
+            <Route path="/*" element={<V2App />} />
+          </Routes>
         )}
       </div>
     </div>

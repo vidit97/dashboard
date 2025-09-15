@@ -8,11 +8,9 @@ import { V2TopicsPage } from './pages/V2TopicsPage'
 import { V2SubscriptionsPage } from './pages/V2SubscriptionsPage'
 import { V2EventsPage } from './pages/V2EventsPage'
 import { V2ACLPage } from './pages/V2ACLPage'
-
-// Import V1 pages temporarily for V2 (will be replaced with proper V2 versions)
-import { AlertsPage } from '../v1/pages/AlertsPage'
-import { SettingsPage } from '../v1/pages/SettingsPage'
-import { DiagnosticsPage } from '../v1/pages/DiagnosticsPage'
+import { V2AlertsPage } from './pages/V2AlertsPage'
+import { V2SettingsPage } from './pages/V2SettingsPage'
+import { V2DiagnosticsPage } from './pages/V2DiagnosticsPage'
 
 export const V2App: React.FC = () => {
   return (
@@ -25,10 +23,10 @@ export const V2App: React.FC = () => {
         <Route path="/events" element={<V2EventsPage />} />
         <Route path="/sessions" element={<V2SessionsPage />} />
         <Route path="/clients" element={<V2ClientsPage />} />
-        <Route path="/alerts" element={<AlertsPage />} />
+        <Route path="/alerts" element={<V2AlertsPage />} />
         <Route path="/acl" element={<V2ACLPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/diagnostics" element={<DiagnosticsPage />} />
+        <Route path="/settings" element={<V2SettingsPage />} />
+        <Route path="/diagnostics" element={<V2DiagnosticsPage />} />
         <Route path="*" element={<Navigate to="/v2/overview" replace />} />
       </Routes>
     </V2Layout>
