@@ -26,6 +26,9 @@ export interface Event {
   qos: number | null;
   username: string | null;
   raw: string | null;
+  retain: boolean;
+  payload_size: number | null;
+  broker: string;
 }
 
 export interface Client {
@@ -292,7 +295,7 @@ export const API_CONFIGS: Record<string, ApiTableConfig> = {
     endpoint: '/events',
     displayName: 'Events',
     defaultColumns: ['id', 'ts', 'action', 'client', 'topic', 'username'],
-    allColumns: ['id', 'ts', 'action', 'client', 'topic', 'qos', 'username', 'raw']
+    allColumns: ['id', 'ts', 'action', 'client', 'topic', 'qos', 'username', 'raw', 'retain', 'payload_size', 'broker']
   },
   clients: {
     name: 'clients',

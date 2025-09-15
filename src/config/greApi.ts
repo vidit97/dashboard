@@ -27,6 +27,9 @@ export interface Event {
   qos: number | null
   username: string | null
   raw: string | null
+  retain: boolean
+  payload_size: number | null
+  broker: string
 }
 
 export interface SessionResponse extends Array<Session> {}

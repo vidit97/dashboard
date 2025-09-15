@@ -18,10 +18,18 @@ const AppContent = () => {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showOriginalNavbar, setShowOriginalNavbar] = useState(false); // Hidden by default
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [showBrokerSelection, setShowBrokerSelection] = useState(false);
-  const [username, setUsername] = useState('');
-  const [selectedBroker, setSelectedBroker] = useState('');
+
+  // ===== DEVELOPMENT LOGIN BYPASS =====
+  // Set BYPASS_LOGIN to true to skip login and go directly to broker selection
+  // Set BYPASS_BROKER_SELECTION to true to skip both login and broker selection entirely
+  const BYPASS_LOGIN = true; // TODO: Set to false for production
+  const BYPASS_BROKER_SELECTION = false; // TODO: Set to false for production
+  // ===================================
+
+  const [isLoggedIn, setIsLoggedIn] = useState(BYPASS_LOGIN);
+  const [showBrokerSelection, setShowBrokerSelection] = useState(BYPASS_LOGIN && !BYPASS_BROKER_SELECTION);
+  const [username, setUsername] = useState(BYPASS_LOGIN ? 'dev-user' : '');
+  const [selectedBroker, setSelectedBroker] = useState(BYPASS_BROKER_SELECTION ? 'dev-broker' : '');
 
   const isV1Route = location.pathname.startsWith('/v1');
   const isV2Route = location.pathname.startsWith('/v2');
@@ -90,13 +98,13 @@ const AppContent = () => {
     setSelectedBroker('')
   }
 
-  // Show login page if not logged in
-  if (!isLoggedIn) {
+  // Show login page if not logged in (unless bypassed)
+  if (!isLoggedIn && !BYPASS_LOGIN) {
     return <LoginPage onLogin={handleLogin} />
   }
 
-  // Show broker selection if logged in but no broker selected
-  if (showBrokerSelection) {
+  // Show broker selection if logged in but no broker selected (unless bypassed)
+  if (showBrokerSelection && !BYPASS_BROKER_SELECTION) {
     return (
       <BrokerSelection
         onBrokerSelect={handleBrokerSelect}

@@ -6,8 +6,248 @@ import { Event as ApiEvent } from '../../types/api'
 // Get API base URL
 const API_BASE_URL = (import.meta as any).env?.VITE_GRE_API_BASE_URL || 'http://localhost:3001'
 
-// Use the ApiEvent type from our API types
-type Event = ApiEvent
+// Use the ApiEvent type from our API types - ensure it includes all fields
+interface Event extends ApiEvent {
+  retain: boolean
+  payload_size: number | null
+  broker: string
+}
+
+// Multi-select component interfaces
+interface MultiSelectFilter {
+  key: string
+  label: string
+  placeholder: string
+  selectedValues: string[]
+  searchInput: string
+  showDropdown: boolean
+  availableOptions?: string[]
+  maxSelections?: number
+  allowTextInput?: boolean
+}
+
+interface MultiSelectDropdownProps {
+  filter: MultiSelectFilter
+  onSearchChange: (value: string) => void
+  onToggleDropdown: (show: boolean) => void
+  onSelectValue: (value: string) => void
+  onRemoveValue: (value: string) => void
+}
+
+// Multi-select dropdown component
+const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
+  filter,
+  onSearchChange,
+  onToggleDropdown,
+  onSelectValue,
+  onRemoveValue
+}) => {
+  const { allowTextInput = false, availableOptions = [], maxSelections = 9 } = filter
+
+  // For API-based filters, filter options; for text-based, allow any input
+  const filteredOptions = allowTextInput
+    ? [] // No dropdown options for text input
+    : availableOptions.filter(value =>
+        value.toLowerCase().includes(filter.searchInput.toLowerCase()) &&
+        !filter.selectedValues.includes(value)
+      ).slice(0, 10)
+
+  const handleInputClick = () => {
+    if (!allowTextInput) {
+      onToggleDropdown(true)
+    }
+  }
+
+  const handleSelectValue = (value: string) => {
+    if (filter.selectedValues.length < maxSelections) {
+      onSelectValue(value)
+      onSearchChange('')
+      onToggleDropdown(false)
+    }
+  }
+
+  const handleAddTextValue = () => {
+    const trimmedValue = filter.searchInput.trim()
+    if (trimmedValue &&
+        !filter.selectedValues.includes(trimmedValue) &&
+        filter.selectedValues.length < maxSelections) {
+      onSelectValue(trimmedValue)
+      onSearchChange('')
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && allowTextInput) {
+      e.preventDefault()
+      handleAddTextValue()
+    }
+  }
+
+  return (
+    <div style={{ position: 'relative', minWidth: '200px', width: '100%' }}>
+      <label style={{
+        display: 'block',
+        fontSize: '14px',
+        fontWeight: '500',
+        marginBottom: '4px',
+        color: '#374151'
+      }}>
+        {filter.label}
+      </label>
+
+      {/* Search Input */}
+      <div style={{ position: 'relative', marginBottom: filter.selectedValues.length > 0 ? '8px' : '0' }}>
+        <input
+          type="text"
+          placeholder={filter.placeholder}
+          value={filter.searchInput}
+          onChange={(e) => onSearchChange(e.target.value)}
+          onClick={handleInputClick}
+          onKeyDown={handleKeyDown}
+          style={{
+            width: '100%',
+            padding: '8px 12px',
+            border: '1px solid #d1d5db',
+            borderRadius: '6px',
+            fontSize: '14px',
+            backgroundColor: '#ffffff',
+            boxSizing: 'border-box'
+          }}
+        />
+
+        {/* Add button for text input */}
+        {allowTextInput && filter.searchInput.trim() && (
+          <button
+            onClick={handleAddTextValue}
+            style={{
+              position: 'absolute',
+              right: '4px',
+              top: '4px',
+              padding: '4px 8px',
+              background: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              fontSize: '12px',
+              cursor: 'pointer'
+            }}
+            disabled={filter.selectedValues.length >= maxSelections}
+          >
+            Add
+          </button>
+        )}
+
+        {/* Dropdown for API-based options */}
+        {!allowTextInput && filter.showDropdown && filteredOptions.length > 0 && (
+          <div style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            backgroundColor: '#ffffff',
+            border: '1px solid #d1d5db',
+            borderRadius: '6px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+            zIndex: 1000,
+            maxHeight: '200px',
+            overflowY: 'auto'
+          }}>
+            {filteredOptions.map((value) => (
+              <div
+                key={value}
+                onClick={() => handleSelectValue(value)}
+                style={{
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  borderBottom: '1px solid #f3f4f6',
+                  fontSize: '14px'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+              >
+                {value}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Selected Values */}
+      {filter.selectedValues.length > 0 && (
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '6px',
+          alignItems: 'flex-start'
+        }}>
+          {filter.selectedValues.map((value) => (
+            <div
+              key={value}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                backgroundColor:
+                  filter.key === 'action' ? '#dbeafe' :
+                  filter.key === 'username' ? '#d1fae5' :
+                  filter.key === 'topic' ? '#fef3c7' :
+                  filter.key === 'qos' ? '#e0e7ff' : '#f3f4f6',
+                color:
+                  filter.key === 'action' ? '#1e40af' :
+                  filter.key === 'username' ? '#065f46' :
+                  filter.key === 'topic' ? '#92400e' :
+                  filter.key === 'qos' ? '#3730a3' : '#374151',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                fontWeight: '500',
+                gap: '4px',
+                maxWidth: '180px',
+                minHeight: '24px'
+              }}
+            >
+              <span style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                flex: 1
+              }}>
+                {value}
+              </span>
+              <button
+                onClick={() => onRemoveValue(value)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'inherit',
+                  cursor: 'pointer',
+                  padding: '0',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  lineHeight: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {filter.selectedValues.length >= maxSelections && (
+        <div style={{
+          fontSize: '12px',
+          color: '#ef4444',
+          marginTop: '4px'
+        }}>
+          Maximum {maxSelections} selections allowed
+        </div>
+      )}
+    </div>
+  )
+}
 
 export const V2EventsPage: React.FC = () => {
   const { state } = useGlobalState()
@@ -16,14 +256,26 @@ export const V2EventsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
-  // Filter states
-  const [actionFilter, setActionFilter] = useState<string>('all')
-  const [topicFilter, setTopicFilter] = useState('')
-  const [clientFilter, setClientFilter] = useState('')
-  const [usernameFilter, setUsernameFilter] = useState('')
-  const [qosFilter, setQosFilter] = useState<string>('all')
+  // Filter states - updated to use arrays for multi-select
+  const [actionFilters, setActionFilters] = useState<string[]>([])
+  const [topicFilters, setTopicFilters] = useState<string[]>([])
+  const [clientFilters, setClientFilters] = useState<string[]>([])
+  const [usernameFilters, setUsernameFilters] = useState<string[]>([])
+  const [qosFilters, setQosFilters] = useState<string[]>([])
   const [retainFilter, setRetainFilter] = useState(false)
   const [timeRangeFilter, setTimeRangeFilter] = useState<string>('24h')
+
+  // Available options for dropdowns
+  const [availableActions, setAvailableActions] = useState<string[]>([])
+  const [availableQoSOptions] = useState<string[]>(['0', '1', '2'])
+  const [actionsLastFetched, setActionsLastFetched] = useState<Date | null>(null)
+
+  // Multi-select UI states
+  const [searchInputs, setSearchInputs] = useState<Record<string, string>>({})
+  const [showDropdowns, setShowDropdowns] = useState<Record<string, boolean>>({})
+
+  // Persistent filter state management
+  const [filterVersion, setFilterVersion] = useState<number>(0) // To track filter changes and avoid stale data
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1)
@@ -45,11 +297,131 @@ export const V2EventsPage: React.FC = () => {
       case '24h': hoursAgo = 24; break
       case '7d': hoursAgo = 24 * 7; break
       case '30d': hoursAgo = 24 * 30; break
+      case 'all': return null // No time filter
       default: return null
     }
 
     const timeAgo = new Date(now.getTime() - hoursAgo * 60 * 60 * 1000)
     return timeAgo.toISOString()
+  }
+
+  // Fetch available actions from API using PostgREST distinct query
+  const fetchAvailableActions = useCallback(async (forceRefresh = false) => {
+    // Check if we need to refresh (cache for 5 minutes)
+    const now = new Date()
+    if (!forceRefresh && actionsLastFetched && availableActions.length > 0) {
+      const timeSinceLastFetch = now.getTime() - actionsLastFetched.getTime()
+      const cacheExpiryMs = 5 * 60 * 1000 // 5 minutes
+      if (timeSinceLastFetch < cacheExpiryMs) {
+        console.log('Using cached actions, last fetched:', actionsLastFetched)
+        return
+      }
+    }
+
+    try {
+      console.log('Fetching fresh actions from API...')
+
+      // Try multiple approaches to get distinct actions efficiently
+      let actions: string[] = []
+
+      try {
+        // First approach: Get a larger sample with action filter to get more comprehensive list
+        const response = await axios.get(`${API_BASE_URL}/events?select=action&action=not.is.null&limit=2000&order=ts.desc`, {
+          timeout: 15000
+        })
+        actions = [...new Set(response.data.map((event: Event) => event.action).filter(Boolean))] as string[]
+        console.log('Successfully fetched actions via primary method:', actions)
+      } catch (primaryErr) {
+        console.warn('Primary fetch failed, trying fallback method:', primaryErr)
+
+        try {
+          // Fallback: Get recent events and extract actions
+          const response = await axios.get(`${API_BASE_URL}/events?select=action&limit=1000&order=ts.desc`, {
+            timeout: 10000
+          })
+          actions = [...new Set(response.data.map((event: Event) => event.action).filter(Boolean))] as string[]
+          console.log('Fetched actions with fallback method:', actions)
+        } catch (fallbackErr) {
+          console.warn('Fallback fetch also failed:', fallbackErr)
+          throw fallbackErr
+        }
+      }
+
+      // Ensure we have at least some actions
+      if (actions.length === 0) {
+        throw new Error('No actions returned from API')
+      }
+
+      setAvailableActions(actions.sort())
+      setActionsLastFetched(now)
+      console.log(`Successfully loaded ${actions.length} unique actions from API`)
+
+    } catch (err) {
+      console.error('Error fetching available actions:', err)
+      // Enhanced fallback with comprehensive MQTT actions based on MQTT protocol
+      const fallbackActions = [
+        'connected', 'disconnected', 'publish', 'subscribe', 'unsubscribe',
+        'connack', 'disconnect', 'pingreq', 'pingresp', 'puback', 'pubcomp',
+        'pubrec', 'pubrel', 'suback', 'unsuback', 'auth', 'error', 'timeout',
+        'session_present', 'will_message', 'retain_available', 'maximum_qos',
+        'keep_alive', 'client_identifier_not_valid', 'bad_username_or_password',
+        'not_authorized', 'server_unavailable', 'server_busy', 'banned'
+      ]
+      setAvailableActions(fallbackActions.sort())
+      setActionsLastFetched(now)
+      console.log('Using enhanced fallback actions due to API error')
+    }
+  }, [actionsLastFetched, availableActions.length])
+
+  // Multi-select handlers
+  const handleSearchInputChange = (key: string, value: string) => {
+    setSearchInputs(prev => ({ ...prev, [key]: value }))
+  }
+
+  const handleToggleDropdown = (key: string, show: boolean) => {
+    setShowDropdowns(prev => ({ ...prev, [key]: show }))
+  }
+
+  const handleSelectValue = (key: string, value: string) => {
+    switch (key) {
+      case 'action':
+        setActionFilters(prev => [...prev, value])
+        break
+      case 'topic':
+        setTopicFilters(prev => [...prev, value])
+        break
+      case 'client':
+        setClientFilters(prev => [...prev, value])
+        break
+      case 'username':
+        setUsernameFilters(prev => [...prev, value])
+        break
+      case 'qos':
+        setQosFilters(prev => [...prev, value])
+        break
+    }
+    setFilterVersion(prev => prev + 1)
+  }
+
+  const handleRemoveValue = (key: string, value: string) => {
+    switch (key) {
+      case 'action':
+        setActionFilters(prev => prev.filter(v => v !== value))
+        break
+      case 'topic':
+        setTopicFilters(prev => prev.filter(v => v !== value))
+        break
+      case 'client':
+        setClientFilters(prev => prev.filter(v => v !== value))
+        break
+      case 'username':
+        setUsernameFilters(prev => prev.filter(v => v !== value))
+        break
+      case 'qos':
+        setQosFilters(prev => prev.filter(v => v !== value))
+        break
+    }
+    setFilterVersion(prev => prev + 1)
   }
 
   // Fetch events data using real PostgREST API with proper filters
@@ -70,32 +442,44 @@ export const V2EventsPage: React.FC = () => {
       // Sorting
       params.append('order', 'ts.desc') // Latest events first
 
-      // Filters
-      if (actionFilter && actionFilter !== 'all') {
-        params.append('action', `eq.${actionFilter}`)
+      // Multi-select Filters - use 'in' operator for arrays
+      if (actionFilters.length > 0) {
+        params.append('action', `in.(${actionFilters.join(',')})`)
       }
 
-      if (topicFilter.trim()) {
-        params.append('topic', `ilike.*${topicFilter.trim()}*`)
+      if (topicFilters.length > 0) {
+        // For text-based topic filters, use OR with ilike
+        const topicConditions = topicFilters.map(topic => `topic.ilike.*${topic.trim()}*`).join(',')
+        params.append('or', `(${topicConditions})`)
       }
 
-      if (clientFilter.trim()) {
-        params.append('client', `ilike.*${clientFilter.trim()}*`)
+      if (clientFilters.length > 0) {
+        // For text-based client filters, use OR with ilike
+        const clientConditions = clientFilters.map(client => `client.ilike.*${client.trim()}*`).join(',')
+        if (topicFilters.length > 0) {
+          // If we already have OR conditions, we need to handle this differently
+          // For now, let's use a simpler approach with multiple requests or combine conditions
+          params.append('and', `(${clientConditions})`)
+        } else {
+          params.append('or', `(${clientConditions})`)
+        }
       }
 
-      if (usernameFilter.trim()) {
-        params.append('username', `ilike.*${usernameFilter.trim()}*`)
+      if (usernameFilters.length > 0) {
+        // For text-based username filters, use OR with ilike
+        const usernameConditions = usernameFilters.map(username => `username.ilike.*${username.trim()}*`).join(',')
+        params.append('username', `in.(${usernameFilters.join(',')})`) // Try exact match first
       }
 
-      if (qosFilter && qosFilter !== 'all') {
-        params.append('qos', `eq.${qosFilter}`)
+      if (qosFilters.length > 0) {
+        params.append('qos', `in.(${qosFilters.join(',')})`)
       }
 
       if (retainFilter) {
         params.append('retain', 'eq.true')
       }
 
-      // Time range filter
+      // Time range filter - fixed to ensure persistence
       const timeRangeTimestamp = getTimeRangeFilter(timeRangeFilter)
       if (timeRangeTimestamp) {
         params.append('ts', `gte.${timeRangeTimestamp}`)
@@ -127,6 +511,20 @@ export const V2EventsPage: React.FC = () => {
       setCurrentPage(page)
       setLastUpdated(new Date())
 
+      // Check if we discovered any new actions in this batch and refresh if needed
+      if (eventData.length > 0) {
+        const newActions = [...new Set(eventData.map(event => event.action).filter(Boolean))]
+        const unknownActions = newActions.filter(action => !availableActions.includes(action))
+
+        if (unknownActions.length > 0 && availableActions.length > 0) {
+          console.log('Discovered new actions in data, refreshing actions list:', unknownActions)
+          // Add new actions immediately to avoid delay
+          setAvailableActions(prev => [...prev, ...unknownActions].sort())
+          // Also trigger a full refresh to catch any other new actions
+          fetchAvailableActions(true)
+        }
+      }
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch events'
       setError(errorMessage)
@@ -134,12 +532,12 @@ export const V2EventsPage: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [actionFilter, topicFilter, clientFilter, usernameFilter, qosFilter, retainFilter, timeRangeFilter, pageSize])
+  }, [actionFilters, topicFilters, clientFilters, usernameFilters, qosFilters, retainFilter, timeRangeFilter, filterVersion, pageSize, availableActions, fetchAvailableActions])
 
   // Load events on mount and when filters change
   useEffect(() => {
     fetchEvents(1) // Reset to page 1 when filters change
-  }, [actionFilter, topicFilter, clientFilter, usernameFilter, qosFilter, retainFilter, timeRangeFilter])
+  }, [actionFilters, topicFilters, clientFilters, usernameFilters, qosFilters, retainFilter, timeRangeFilter, filterVersion])
 
   // Load events when page changes
   useEffect(() => {
@@ -156,15 +554,42 @@ export const V2EventsPage: React.FC = () => {
     }
   }, [fetchEvents, currentPage, state.autoRefresh, state.refreshInterval])
 
+  // Fetch available actions on mount and periodically refresh
+  useEffect(() => {
+    fetchAvailableActions()
+
+    // Auto-refresh actions every 10 minutes to discover new action types
+    const actionsRefreshInterval = setInterval(() => {
+      fetchAvailableActions(false) // Use cache if fresh enough
+    }, 10 * 60 * 1000) // 10 minutes
+
+    return () => clearInterval(actionsRefreshInterval)
+  }, [fetchAvailableActions])
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!(event.target as Element)?.closest('.filter-dropdown')) {
+        setShowDropdowns({})
+      }
+    }
+
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [])
+
   // Clear filters
   const clearFilters = () => {
-    setActionFilter('all')
-    setTopicFilter('')
-    setClientFilter('')
-    setUsernameFilter('')
-    setQosFilter('all')
+    setActionFilters([])
+    setTopicFilters([])
+    setClientFilters([])
+    setUsernameFilters([])
+    setQosFilters([])
     setRetainFilter(false)
     setTimeRangeFilter('24h')
+    setSearchInputs({})
+    setShowDropdowns({})
+    setFilterVersion(prev => prev + 1)
   }
 
   // Save current view
@@ -172,11 +597,11 @@ export const V2EventsPage: React.FC = () => {
     const viewName = prompt('Enter a name for this view:')
     if (viewName) {
       const filters = {
-        actionFilter,
-        topicFilter,
-        clientFilter,
-        usernameFilter,
-        qosFilter,
+        actionFilters,
+        topicFilters,
+        clientFilters,
+        usernameFilters,
+        qosFilters,
         retainFilter,
         timeRangeFilter
       }
@@ -186,13 +611,14 @@ export const V2EventsPage: React.FC = () => {
 
   // Load saved view
   const loadSavedView = (filters: any) => {
-    setActionFilter(filters.actionFilter || 'all')
-    setTopicFilter(filters.topicFilter || '')
-    setClientFilter(filters.clientFilter || '')
-    setUsernameFilter(filters.usernameFilter || '')
-    setQosFilter(filters.qosFilter || 'all')
+    setActionFilters(filters.actionFilters || [])
+    setTopicFilters(filters.topicFilters || [])
+    setClientFilters(filters.clientFilters || [])
+    setUsernameFilters(filters.usernameFilters || [])
+    setQosFilters(filters.qosFilters || [])
     setRetainFilter(filters.retainFilter || false)
     setTimeRangeFilter(filters.timeRangeFilter || '24h')
+    setFilterVersion(prev => prev + 1)
   }
 
   // Export events as CSV
@@ -205,20 +631,26 @@ export const V2EventsPage: React.FC = () => {
       params.append('order', 'ts.desc')
 
       // Apply same filters as current view
-      if (actionFilter && actionFilter !== 'all') {
-        params.append('action', `eq.${actionFilter}`)
+      if (actionFilters.length > 0) {
+        params.append('action', `in.(${actionFilters.join(',')})`)
       }
-      if (topicFilter.trim()) {
-        params.append('topic', `ilike.*${topicFilter.trim()}*`)
+      if (topicFilters.length > 0) {
+        const topicConditions = topicFilters.map(topic => `topic.ilike.*${topic.trim()}*`).join(',')
+        params.append('or', `(${topicConditions})`)
       }
-      if (clientFilter.trim()) {
-        params.append('client', `ilike.*${clientFilter.trim()}*`)
+      if (clientFilters.length > 0) {
+        const clientConditions = clientFilters.map(client => `client.ilike.*${client.trim()}*`).join(',')
+        if (topicFilters.length > 0) {
+          params.append('and', `(${clientConditions})`)
+        } else {
+          params.append('or', `(${clientConditions})`)
+        }
       }
-      if (usernameFilter.trim()) {
-        params.append('username', `ilike.*${usernameFilter.trim()}*`)
+      if (usernameFilters.length > 0) {
+        params.append('username', `in.(${usernameFilters.join(',')})`)
       }
-      if (qosFilter && qosFilter !== 'all') {
-        params.append('qos', `eq.${qosFilter}`)
+      if (qosFilters.length > 0) {
+        params.append('qos', `in.(${qosFilters.join(',')})`)
       }
       if (retainFilter) {
         params.append('retain', 'eq.true')
@@ -385,6 +817,34 @@ export const V2EventsPage: React.FC = () => {
               Export CSV
             </button>
             <button
+              onClick={() => {
+                fetchAvailableActions(true)
+                // Show user feedback
+                const button = document.activeElement as HTMLButtonElement
+                if (button) {
+                  const originalText = button.textContent
+                  button.textContent = 'Refreshing...'
+                  button.disabled = true
+                  setTimeout(() => {
+                    button.textContent = originalText
+                    button.disabled = false
+                  }, 2000)
+                }
+              }}
+              style={{
+                padding: '6px 12px',
+                background: '#8b5cf6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                cursor: 'pointer'
+              }}
+              title="Refresh available actions from API - fetches latest action types from your events"
+            >
+              Refresh Actions
+            </button>
+            <button
               onClick={clearFilters}
               style={{
                 padding: '6px 12px',
@@ -427,115 +887,105 @@ export const V2EventsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Filter Inputs */}
-        <div style={{
+        {/* Multi-select Filter Inputs */}
+        <div className="filter-dropdown" style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '16px'
+          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+          gap: '20px'
         }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>
-              Action
-            </label>
-            <select
-              value={actionFilter}
-              onChange={(e) => setActionFilter(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '14px'
-              }}
-            >
-              <option value="all">All Actions</option>
-              <option value="connected">Connected</option>
-              <option value="disconnected">Disconnected</option>
-              <option value="publish">Publish</option>
-              <option value="subscribe">Subscribe</option>
-              <option value="unsubscribe">Unsubscribe</option>
-            </select>
-          </div>
+          {/* Action Filter */}
+          <MultiSelectDropdown
+            filter={{
+              key: 'action',
+              label: 'Actions',
+              placeholder: 'Search and select actions...',
+              selectedValues: actionFilters,
+              searchInput: searchInputs.action || '',
+              showDropdown: showDropdowns.action || false,
+              availableOptions: availableActions,
+              maxSelections: 9,
+              allowTextInput: false
+            }}
+            onSearchChange={(value) => handleSearchInputChange('action', value)}
+            onToggleDropdown={(show) => handleToggleDropdown('action', show)}
+            onSelectValue={(value) => handleSelectValue('action', value)}
+            onRemoveValue={(value) => handleRemoveValue('action', value)}
+          />
 
-          <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>
-              Client
-            </label>
-            <input
-              type="text"
-              placeholder="Filter by client..."
-              value={clientFilter}
-              onChange={(e) => setClientFilter(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '14px'
-              }}
-            />
-          </div>
+          {/* Username Filter */}
+          <MultiSelectDropdown
+            filter={{
+              key: 'username',
+              label: 'Usernames',
+              placeholder: 'Add username filters...',
+              selectedValues: usernameFilters,
+              searchInput: searchInputs.username || '',
+              showDropdown: showDropdowns.username || false,
+              maxSelections: 8,
+              allowTextInput: true
+            }}
+            onSearchChange={(value) => handleSearchInputChange('username', value)}
+            onToggleDropdown={(show) => handleToggleDropdown('username', show)}
+            onSelectValue={(value) => handleSelectValue('username', value)}
+            onRemoveValue={(value) => handleRemoveValue('username', value)}
+          />
 
-          <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>
-              Username
-            </label>
-            <input
-              type="text"
-              placeholder="Filter by username..."
-              value={usernameFilter}
-              onChange={(e) => setUsernameFilter(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '14px'
-              }}
-            />
-          </div>
+          {/* Topic Filter */}
+          <MultiSelectDropdown
+            filter={{
+              key: 'topic',
+              label: 'Topics',
+              placeholder: 'Add topic filters...',
+              selectedValues: topicFilters,
+              searchInput: searchInputs.topic || '',
+              showDropdown: showDropdowns.topic || false,
+              maxSelections: 8,
+              allowTextInput: true
+            }}
+            onSearchChange={(value) => handleSearchInputChange('topic', value)}
+            onToggleDropdown={(show) => handleToggleDropdown('topic', show)}
+            onSelectValue={(value) => handleSelectValue('topic', value)}
+            onRemoveValue={(value) => handleRemoveValue('topic', value)}
+          />
 
-          <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>
-              Topic
-            </label>
-            <input
-              type="text"
-              placeholder="Filter by topic..."
-              value={topicFilter}
-              onChange={(e) => setTopicFilter(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '14px'
-              }}
-            />
-          </div>
+          {/* Client Filter */}
+          <MultiSelectDropdown
+            filter={{
+              key: 'client',
+              label: 'Clients',
+              placeholder: 'Add client filters...',
+              selectedValues: clientFilters,
+              searchInput: searchInputs.client || '',
+              showDropdown: showDropdowns.client || false,
+              maxSelections: 8,
+              allowTextInput: true
+            }}
+            onSearchChange={(value) => handleSearchInputChange('client', value)}
+            onToggleDropdown={(show) => handleToggleDropdown('client', show)}
+            onSelectValue={(value) => handleSelectValue('client', value)}
+            onRemoveValue={(value) => handleRemoveValue('client', value)}
+          />
 
-          <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>
-              QoS
-            </label>
-            <select
-              value={qosFilter}
-              onChange={(e) => setQosFilter(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '14px'
-              }}
-            >
-              <option value="all">All QoS</option>
-              <option value="0">QoS 0</option>
-              <option value="1">QoS 1</option>
-              <option value="2">QoS 2</option>
-            </select>
-          </div>
+          {/* QoS Filter */}
+          <MultiSelectDropdown
+            filter={{
+              key: 'qos',
+              label: 'QoS Levels',
+              placeholder: 'Select QoS levels...',
+              selectedValues: qosFilters,
+              searchInput: searchInputs.qos || '',
+              showDropdown: showDropdowns.qos || false,
+              availableOptions: availableQoSOptions,
+              maxSelections: 3,
+              allowTextInput: false
+            }}
+            onSearchChange={(value) => handleSearchInputChange('qos', value)}
+            onToggleDropdown={(show) => handleToggleDropdown('qos', show)}
+            onSelectValue={(value) => handleSelectValue('qos', value)}
+            onRemoveValue={(value) => handleRemoveValue('qos', value)}
+          />
 
+          {/* Retain Filter */}
           <div style={{ display: 'flex', alignItems: 'end' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', marginBottom: '8px' }}>
               <input
@@ -543,7 +993,7 @@ export const V2EventsPage: React.FC = () => {
                 checked={retainFilter}
                 onChange={(e) => setRetainFilter(e.target.checked)}
               />
-              Retained only
+              Retained messages only
             </label>
           </div>
         </div>
@@ -576,8 +1026,13 @@ export const V2EventsPage: React.FC = () => {
           </div>
         )}
 
-        <div style={{ marginTop: '16px', fontSize: '14px', color: '#6b7280' }}>
-          {totalItems.toLocaleString()} events found | Page {currentPage} of {totalPages}
+        <div style={{ marginTop: '16px', fontSize: '14px', color: '#6b7280', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{totalItems.toLocaleString()} events found | Page {currentPage} of {totalPages}</span>
+          {actionsLastFetched && (
+            <span title={`Actions last fetched: ${actionsLastFetched.toLocaleString()}`}>
+              Actions: {availableActions.length} types | Updated: {actionsLastFetched.toLocaleTimeString()}
+            </span>
+          )}
         </div>
       </div>
 
@@ -716,18 +1171,39 @@ export const V2EventsPage: React.FC = () => {
                 onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
                 style={{
-                  padding: '6px 12px',
-                  background: currentPage === 1 ? '#f3f4f6' : '#fff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
+                  padding: '8px 16px',
+                  background: currentPage === 1 ? '#f3f4f6' : '#3b82f6',
+                  color: currentPage === 1 ? '#9ca3af' : '#ffffff',
+                  border: currentPage === 1 ? '1px solid #d1d5db' : '1px solid #3b82f6',
+                  borderRadius: '6px',
                   fontSize: '14px',
-                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                  fontWeight: '500',
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  if (currentPage !== 1) {
+                    e.currentTarget.style.background = '#2563eb'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (currentPage !== 1) {
+                    e.currentTarget.style.background = '#3b82f6'
+                  }
                 }}
               >
                 Previous
               </button>
 
-              <span style={{ padding: '6px 12px', fontSize: '14px', color: '#6b7280' }}>
+              <span style={{
+                padding: '8px 16px',
+                fontSize: '14px',
+                color: '#1f2937',
+                fontWeight: '500',
+                background: '#f8f9fa',
+                borderRadius: '6px',
+                border: '1px solid #e5e7eb'
+              }}>
                 Page {currentPage} of {totalPages}
               </span>
 
@@ -735,12 +1211,25 @@ export const V2EventsPage: React.FC = () => {
                 onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                 disabled={currentPage === totalPages}
                 style={{
-                  padding: '6px 12px',
-                  background: currentPage === totalPages ? '#f3f4f6' : '#fff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
+                  padding: '8px 16px',
+                  background: currentPage === totalPages ? '#f3f4f6' : '#3b82f6',
+                  color: currentPage === totalPages ? '#9ca3af' : '#ffffff',
+                  border: currentPage === totalPages ? '1px solid #d1d5db' : '1px solid #3b82f6',
+                  borderRadius: '6px',
                   fontSize: '14px',
-                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+                  fontWeight: '500',
+                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  if (currentPage !== totalPages) {
+                    e.currentTarget.style.background = '#2563eb'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (currentPage !== totalPages) {
+                    e.currentTarget.style.background = '#3b82f6'
+                  }
                 }}
               >
                 Next
