@@ -2,13 +2,15 @@ import React from 'react'
 import { NavLink } from 'react-router-dom'
 import { V1_PAGES, LeftNavProps } from '../types/common'
 
-export const LeftNavigation: React.FC<LeftNavProps> = ({ currentPage, onPageChange, isOpen }) => {
-  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
-  
+export const LeftNavigation: React.FC<LeftNavProps> = ({ currentPage, onPageChange, isOpen, screenWidth }) => {
+  const currentScreenWidth = screenWidth || (typeof window !== 'undefined' ? window.innerWidth : 1024)
+  const isMobile = currentScreenWidth <= 768
+  const shouldOverlay = currentScreenWidth <= 1024
+
   return (
     <>
-      {/* Mobile Overlay */}
-      {isMobile && isOpen && (
+      {/* Overlay for mobile and tablet */}
+      {shouldOverlay && isOpen && (
         <div
           style={{
             position: 'fixed',
@@ -25,7 +27,7 @@ export const LeftNavigation: React.FC<LeftNavProps> = ({ currentPage, onPageChan
       )}
       
       <div style={{
-        width: isMobile ? (isOpen ? '240px' : '0px') : (isOpen ? '220px' : '0px'),
+        width: isMobile ? '240px' : '220px',
         height: '100vh',
         background: '#f8fafc',
         borderRight: '1px solid #e2e8f0',
@@ -34,17 +36,17 @@ export const LeftNavigation: React.FC<LeftNavProps> = ({ currentPage, onPageChan
         position: 'fixed',
         left: 0,
         top: 0,
-        zIndex: 100,
-        transition: 'width 0.3s ease',
+        zIndex: shouldOverlay ? 100 : 50,
+        transition: 'transform 0.28s cubic-bezier(.2,.9,.2,1)',
+        transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
         overflow: 'hidden',
-        boxShadow: isMobile && isOpen ? '2px 0 10px rgba(0, 0, 0, 0.1)' : 'none'
-      }}>
+        boxShadow: (shouldOverlay && isOpen) ? '2px 0 10px rgba(0, 0, 0, 0.1)' : 'none'
+      }} aria-hidden={!isOpen}>
         {/* Header */}
         <div style={{
-          padding: isOpen ? '16px' : '16px 0px',
+          padding: '16px',
           borderBottom: '1px solid #e2e8f0',
-          background: 'white',
-          minWidth: isMobile ? '240px' : '220px'
+          background: 'white'
         }}>
           <h1 style={{
             fontSize: '20px',
@@ -71,8 +73,7 @@ export const LeftNavigation: React.FC<LeftNavProps> = ({ currentPage, onPageChan
         <nav style={{ 
           flex: 1, 
           padding: '12px 0',
-          overflowY: 'auto',
-          minWidth: isMobile ? '240px' : '220px'
+          overflowY: 'auto'
         }}>
           <div style={{
             fontSize: '11px',
@@ -130,8 +131,7 @@ export const LeftNavigation: React.FC<LeftNavProps> = ({ currentPage, onPageChan
         <div style={{
           padding: '12px 16px',
           borderTop: '1px solid #e2e8f0',
-          background: 'white',
-          minWidth: isMobile ? '240px' : '220px'
+          background: 'white'
         }}>
           <div style={{
             fontSize: '12px',

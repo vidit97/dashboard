@@ -27,6 +27,7 @@ export interface LeftNavProps {
   currentPage: string
   onPageChange: (page: string) => void
   isOpen: boolean
+  screenWidth?: number
 }
 
 // Page definitions matching watchmqtt_ui_setup.md

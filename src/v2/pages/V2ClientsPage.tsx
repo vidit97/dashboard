@@ -18,7 +18,7 @@ interface ClientWithSession extends Client {
   active_subscriptions?: Subscription[]
 }
 
-export const ClientsPage: React.FC = () => {
+export const V2ClientsPage: React.FC = () => {
   const { state } = useGlobalState()
   const [connectedUsersCount, setConnectedUsersCount] = useState(0)
   const [topUsers, setTopUsers] = useState<Array<[string, number]>>([])
@@ -83,18 +83,17 @@ export const ClientsPage: React.FC = () => {
         return {
           id: client?.id || 0,
           client: session.client,
-          // Ensure username is a string to match Client type
           username: session.username || '',
           first_seen: client?.first_seen || session.start_ts,
           last_seen: client?.last_seen || session.start_ts,
-          session_state: 'open' as const, // All sessions from this query are active
+          session_state: 'open' as const,
           ip_port: `${session.ip_address || 'N/A'}:${session.port || 'N/A'}`,
           protocol_ver: session.protocol_version || 'N/A',
           keepalive: session.keepalive || null,
           subs_count: clientSubscriptions.length,
-          pubs_24h: 0, // TODO: Calculate from events if available
-          bytes_24h: 0, // TODO: Calculate from events if available
-          drops_24h: 0, // TODO: Calculate from events if available
+          pubs_24h: 0,
+          bytes_24h: 0,
+          drops_24h: 0,
           current_session: session,
           active_subscriptions: clientSubscriptions
         }
@@ -102,7 +101,6 @@ export const ClientsPage: React.FC = () => {
 
       // Also add clients without active sessions (closed state)
       clientsResult.data.forEach(client => {
-        // Only add if client doesn't already have an active session
         const hasActiveSession = enhancedClients.some(ec => ec.client === client.client)
         if (!hasActiveSession) {
           const clientSubscriptions = clientSubscriptionsMap.get(client.client) || []
@@ -124,7 +122,7 @@ export const ClientsPage: React.FC = () => {
 
       setClients(enhancedClients)
 
-      // Calculate connected users stats - using same approach as GRE
+      // Calculate connected users stats
       const activeClients = enhancedClients.filter(c => c.session_state === 'open')
       const uniqueUsers = new Set(activeClients.map(c => c.username).filter(Boolean))
       setConnectedUsersCount(uniqueUsers.size)
@@ -160,7 +158,7 @@ export const ClientsPage: React.FC = () => {
       filtered = filtered.filter(client => {
         const clientId = (client.client || '').toLowerCase()
         const username = (client.username || '').toLowerCase()
-        
+
         return clientId.includes(search) || username.includes(search)
       })
     }
@@ -200,12 +198,7 @@ export const ClientsPage: React.FC = () => {
   }
 
   return (
-  <div style={{
-      width: '100%',
-      padding: '16px',
-      minHeight: '100%',
-      boxSizing: 'border-box'
-    }}>
+    <div>
       {/* Page Header */}
       <div style={{ marginBottom: '32px' }}>
         <h1 style={{

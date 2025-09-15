@@ -283,7 +283,12 @@ export const SessionsPage: React.FC = () => {
   }
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 8px' }}>
+    <div style={{
+      width: '100%',
+      padding: '16px',
+      minHeight: '100%',
+      boxSizing: 'border-box'
+    }}>
       {/* Page Header */}
       <div style={{ marginBottom: '32px' }}>
         <h1 style={{

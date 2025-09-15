@@ -9,7 +9,7 @@ import { ActivitySection } from '../../components/acl/ActivitySection'
 
 type ACLTab = 'overview' | 'roles' | 'clients' | 'activity' | 'backups'
 
-export const ACLPage: React.FC = () => {
+export const V2ACLPage: React.FC = () => {
   const { state } = useGlobalState()
   const [activeTab, setActiveTab] = useState<ACLTab>('overview')
   const [lastRefresh, setLastRefresh] = useState(new Date())
@@ -44,26 +44,21 @@ export const ACLPage: React.FC = () => {
   }
 
   return (
-    <div style={{
-      width: '100%',
-      padding: '16px',
-      minHeight: '100%',
-      boxSizing: 'border-box'
-    }}>
+    <div>
       {/* Page Header */}
       <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ 
-          fontSize: '32px', 
-          fontWeight: '700', 
+        <h1 style={{
+          fontSize: '32px',
+          fontWeight: '700',
           color: '#1f2937',
           margin: '0 0 8px 0'
         }}>
           ACL (Dynamic Security)
         </h1>
-        <p style={{ 
-          fontSize: '16px', 
-          color: '#6b7280', 
-          margin: 0 
+        <p style={{
+          fontSize: '16px',
+          color: '#6b7280',
+          margin: 0
         }}>
           Live roles/clients/ACLs control with audit for {state.broker} broker
         </p>
@@ -133,10 +128,10 @@ export const ACLPage: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '16px' }}>📤</span>
             <span style={{ fontSize: '14px' }}>Publish Send:</span>
-            <span style={{ 
-              padding: '2px 8px', 
-              borderRadius: '12px', 
-              fontSize: '12px', 
+            <span style={{
+              padding: '2px 8px',
+              borderRadius: '12px',
+              fontSize: '12px',
               fontWeight: '500',
               background: '#d1fae5',
               color: '#065f46'
@@ -147,10 +142,10 @@ export const ACLPage: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '16px' }}>📥</span>
             <span style={{ fontSize: '14px' }}>Publish Receive:</span>
-            <span style={{ 
-              padding: '2px 8px', 
-              borderRadius: '12px', 
-              fontSize: '12px', 
+            <span style={{
+              padding: '2px 8px',
+              borderRadius: '12px',
+              fontSize: '12px',
               fontWeight: '500',
               background: '#d1fae5',
               color: '#065f46'
@@ -161,10 +156,10 @@ export const ACLPage: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '16px' }}>📝</span>
             <span style={{ fontSize: '14px' }}>Subscribe:</span>
-            <span style={{ 
-              padding: '2px 8px', 
-              borderRadius: '12px', 
-              fontSize: '12px', 
+            <span style={{
+              padding: '2px 8px',
+              borderRadius: '12px',
+              fontSize: '12px',
               fontWeight: '500',
               background: '#d1fae5',
               color: '#065f46'
@@ -175,10 +170,10 @@ export const ACLPage: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '16px' }}>❌</span>
             <span style={{ fontSize: '14px' }}>Unsubscribe:</span>
-            <span style={{ 
-              padding: '2px 8px', 
-              borderRadius: '12px', 
-              fontSize: '12px', 
+            <span style={{
+              padding: '2px 8px',
+              borderRadius: '12px',
+              fontSize: '12px',
               fontWeight: '500',
               background: '#d1fae5',
               color: '#065f46'
@@ -261,7 +256,7 @@ export const ACLPage: React.FC = () => {
         fontSize: '14px',
         color: '#64748b'
       }}>
-        Last refresh: {lastRefresh.toLocaleString()} • 
+        Last refresh: {lastRefresh.toLocaleString()} •
         Connected to: {state.broker} broker
       </div>
     </div>

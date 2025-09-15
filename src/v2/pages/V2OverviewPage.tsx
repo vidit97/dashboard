@@ -7,9 +7,9 @@ import TrafficChart from '../../ui/TrafficChart'
 import ConnectionsChart from '../../ui/ConnectionsChart'
 import StorageChart from '../../ui/StorageChart'
 import { SummaryCards } from '../../components/SummaryCards'
-import { DetailedActivityFeed } from '../components/DetailedActivityFeed'
+import { DetailedActivityFeed } from '../../v1/components/DetailedActivityFeed'
 
-export const OverviewPage: React.FC = () => {
+export const V2OverviewPage: React.FC = () => {
   const { state } = useGlobalState()
   const [currentTime, setCurrentTime] = useState(new Date())
   const [overview, setOverview] = useState<OverviewData | null>(null)
@@ -21,14 +21,14 @@ export const OverviewPage: React.FC = () => {
     try {
       setLoading(true)
       setError(null)
-      console.log('V1 Overview: Fetching data for broker:', state.broker)
+      console.log('V2 Overview: Fetching data for broker:', state.broker)
       const data = await watchMQTTService.getOverview(state.broker)
-      console.log('V1 Overview: API Response:', data)
+      console.log('V2 Overview: API Response:', data)
       setOverview(data)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to fetch overview data'
       setError(errorMsg)
-      console.error('V1 Overview: Error fetching data:', err)
+      console.error('V2 Overview: Error fetching data:', err)
     } finally {
       setLoading(false)
     }
@@ -38,7 +38,7 @@ export const OverviewPage: React.FC = () => {
   useEffect(() => {
     // Always fetch on mount
     fetchOverview()
-    
+
     // Only set up interval if auto-refresh is enabled
     if (state.autoRefresh) {
       const interval = setInterval(fetchOverview, state.refreshInterval * 1000)
@@ -54,14 +54,14 @@ export const OverviewPage: React.FC = () => {
 
   const getConnectionStatus = () => {
     if (!overview) return { status: 'Unknown', color: '#6b7280' }
-    
+
     if (overview.connected > 0 && overview.disconnected === 0) {
       return { status: 'Healthy', color: '#10b981' }
     }
-    
+
     const total = overview.connected + overview.disconnected
     if (total === 0) return { status: 'No Clients', color: '#6b7280' }
-    
+
     const connectedRatio = overview.connected / total
     if (connectedRatio >= 0.9) return { status: 'Healthy', color: '#10b981' }
     if (connectedRatio >= 0.7) return { status: 'Warning', color: '#f59e0b' }
@@ -71,7 +71,7 @@ export const OverviewPage: React.FC = () => {
   // Custom formatter for bytes with 2 decimal places max
   const formatBytes = (value: number | undefined | null): string => {
     if (!value || value === 0) return '0B'
-    
+
     if (value >= 1024 * 1024 * 1024) return `${(value / (1024 * 1024 * 1024)).toFixed(2)}GB`
     if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(2)}MB`
     if (value >= 1024) return `${(value / 1024).toFixed(2)}KB`
@@ -79,17 +79,12 @@ export const OverviewPage: React.FC = () => {
   }
 
   return (
-  <div style={{
-    width: '100%',
-    padding: '16px',
-    minHeight: '100%',
-    boxSizing: 'border-box'
-  }}>
+    <div>
       {/* Hero Status Section */}
       <div style={{
         background: '#1f2937',
         borderRadius: '16px',
-        padding: window.innerWidth > 768 ? '40px' : '24px',
+        padding: '40px',
         marginBottom: '40px',
         color: 'white',
         position: 'relative',
@@ -107,12 +102,12 @@ export const OverviewPage: React.FC = () => {
             Error: {error}
           </div>
         )}
-        
+
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
           <div>
-            <h1 style={{ 
-              fontSize: '32px', 
-              fontWeight: '700', 
+            <h1 style={{
+              fontSize: '32px',
+              fontWeight: '700',
               margin: '0 0 8px 0',
               color: '#ffffff'
             }}>
@@ -120,10 +115,10 @@ export const OverviewPage: React.FC = () => {
             </h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '16px', color: '#9ca3af' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{ 
-                  width: '10px', 
-                  height: '10px', 
-                  borderRadius: '50%', 
+                <div style={{
+                  width: '10px',
+                  height: '10px',
+                  borderRadius: '50%',
                   backgroundColor: loading ? '#6b7280' : getConnectionStatus().color
                 }} />
                 <span style={{ fontWeight: '500', textTransform: 'capitalize', color: '#e5e7eb' }}>
@@ -139,9 +134,9 @@ export const OverviewPage: React.FC = () => {
         </div>
 
         {/* Key Metrics Row */}
-        <div className="v1-hero-metrics" style={{
+        <div style={{
           display: 'grid',
-          gridTemplateColumns: window.innerWidth > 768 ? 'repeat(4, 1fr)' : window.innerWidth > 480 ? 'repeat(2, 1fr)' : '1fr',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
           gap: '20px'
         }}>
           <div style={{ textAlign: 'center' }}>
@@ -172,9 +167,9 @@ export const OverviewPage: React.FC = () => {
       </div>
 
       {/* Main Content Grid */}
-      <div className="v1-main-grid" style={{
+      <div style={{
         display: 'grid',
-        gridTemplateColumns: window.innerWidth > 1024 ? '2fr 1fr' : '1fr',
+        gridTemplateColumns: '2fr 1fr',
         gap: '28px',
         marginBottom: '40px'
       }}>
@@ -188,9 +183,9 @@ export const OverviewPage: React.FC = () => {
             border: '1px solid #e5e7eb',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'
           }}>
-            <h3 style={{ 
-              margin: '0 0 20px 0', 
-              fontSize: '20px', 
+            <h3 style={{
+              margin: '0 0 20px 0',
+              fontSize: '20px',
               fontWeight: '600',
               color: '#1f2937',
               display: 'flex',
@@ -199,14 +194,14 @@ export const OverviewPage: React.FC = () => {
             }}>
               ⚡ Real-time Metrics
             </h3>
-            
-            <div className="v1-metrics-grid" style={{
+
+            <div style={{
               display: 'grid',
-              gridTemplateColumns: window.innerWidth > 640 ? '1fr 1fr' : '1fr',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
               gap: '16px'
             }}>
               {/* Message Flow */}
-              <div style={{ 
+              <div style={{
                 padding: '20px',
                 background: '#ffffff',
                 borderRadius: '8px',
@@ -227,7 +222,7 @@ export const OverviewPage: React.FC = () => {
               </div>
 
               {/* Bytes/sec */}
-              <div style={{ 
+              <div style={{
                 padding: '20px',
                 background: '#ffffff',
                 borderRadius: '8px',
@@ -236,7 +231,7 @@ export const OverviewPage: React.FC = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>Bytes/sec</span>
                   <div style={{ width: '32px', height: '32px', background: '#f3f4f6', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-                    �
+                    🌐
                   </div>
                 </div>
                 <div style={{ fontSize: '28px', fontWeight: '700', color: '#111827', marginBottom: '8px' }}>
@@ -248,7 +243,7 @@ export const OverviewPage: React.FC = () => {
               </div>
 
               {/* Subscriptions */}
-              <div style={{ 
+              <div style={{
                 padding: '20px',
                 background: '#ffffff',
                 borderRadius: '8px',
@@ -257,7 +252,7 @@ export const OverviewPage: React.FC = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>Subscriptions</span>
                   <div style={{ width: '32px', height: '32px', background: '#f3f4f6', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-                    �
+                    👥
                   </div>
                 </div>
                 <div style={{ fontSize: '28px', fontWeight: '700', color: '#111827', marginBottom: '8px' }}>
@@ -269,7 +264,7 @@ export const OverviewPage: React.FC = () => {
               </div>
 
               {/* Retained Messages */}
-              <div style={{ 
+              <div style={{
                 padding: '20px',
                 background: '#ffffff',
                 borderRadius: '8px',
@@ -290,9 +285,6 @@ export const OverviewPage: React.FC = () => {
               </div>
             </div>
           </div>
-
-          {/* Alerts Section - Temporarily disabled while using real API data */}
-          {/* Future: Integrate with real alerts API */}
         </div>
 
         {/* Right Column - Activity Stream */}
@@ -306,9 +298,9 @@ export const OverviewPage: React.FC = () => {
           top: '20px',
           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'
         }}>
-          <h3 style={{ 
-            margin: '0 0 20px 0', 
-            fontSize: '18px', 
+          <h3 style={{
+            margin: '0 0 20px 0',
+            fontSize: '18px',
             fontWeight: '600',
             color: '#111827',
             display: 'flex',
@@ -317,19 +309,19 @@ export const OverviewPage: React.FC = () => {
           }}>
             📈 Latest Events (ts, action, client)
           </h3>
-          
-          <DetailedActivityFeed 
+
+          <DetailedActivityFeed
             refreshInterval={state.autoRefresh ? 30 : 0}
           />
         </div>
       </div>
 
       {/* Charts Section */}
-      <div className="v1-charts-section" style={{ marginBottom: '32px' }}>
+      <div style={{ marginBottom: '32px' }}>
         {/* Top Row - Two Charts Side by Side */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: window.innerWidth > 768 ? '1fr 1fr' : '1fr',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))',
           gap: '24px',
           marginBottom: '24px'
         }}>
@@ -338,7 +330,6 @@ export const OverviewPage: React.FC = () => {
             borderRadius: '12px',
             border: '1px solid #e5e7eb',
             padding: '20px',
-            overflow: 'hidden',
             boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
             minHeight: '300px'
           }}>
@@ -354,7 +345,6 @@ export const OverviewPage: React.FC = () => {
             borderRadius: '12px',
             border: '1px solid #e5e7eb',
             padding: '20px',
-            overflow: 'hidden',
             boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
             minHeight: '300px'
           }}>
@@ -373,7 +363,6 @@ export const OverviewPage: React.FC = () => {
           borderRadius: '12px',
           border: '1px solid #e5e7eb',
           padding: '20px',
-          overflow: 'hidden',
           boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
           minHeight: '300px'
         }}>
@@ -395,9 +384,9 @@ export const OverviewPage: React.FC = () => {
         marginBottom: '40px',
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'
       }}>
-        <h3 style={{ 
-          margin: '0 0 20px 0', 
-          fontSize: '20px', 
+        <h3 style={{
+          margin: '0 0 20px 0',
+          fontSize: '20px',
           fontWeight: '600',
           color: '#1f2937',
           display: 'flex',
@@ -418,9 +407,9 @@ export const OverviewPage: React.FC = () => {
         marginBottom: '40px',
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'
       }}>
-        <h3 style={{ 
-          margin: '0 0 16px 0', 
-          fontSize: '18px', 
+        <h3 style={{
+          margin: '0 0 16px 0',
+          fontSize: '18px',
           fontWeight: '600',
           color: '#111827'
         }}>

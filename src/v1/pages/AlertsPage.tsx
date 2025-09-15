@@ -68,7 +68,12 @@ export const AlertsPage: React.FC = () => {
   }
 
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+    <div style={{
+      width: '100%',
+      padding: '16px',
+      minHeight: '100%',
+      boxSizing: 'border-box'
+    }}>
       {/* Page Header */}
       <div style={{ marginBottom: '32px' }}>
         <h1 style={{ 

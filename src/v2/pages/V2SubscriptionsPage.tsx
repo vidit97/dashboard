@@ -5,7 +5,7 @@ import { Subscription } from '../../types/api'
 // Reusing existing components
 import SubscriptionChurn from '../../components/SubscriptionChurn'
 
-export const SubscriptionsPage: React.FC = () => {
+export const V2SubscriptionsPage: React.FC = () => {
   const { state } = useGlobalState()
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [filteredSubscriptions, setFilteredSubscriptions] = useState<Subscription[]>([])
@@ -108,12 +108,7 @@ export const SubscriptionsPage: React.FC = () => {
   }
 
   return (
-    <div style={{
-      width: '100%',
-      padding: '16px',
-      minHeight: '100%',
-      boxSizing: 'border-box'
-    }}>
+    <div>
       {/* Page Header */}
       <div style={{ marginBottom: '32px' }}>
         <h1 style={{
@@ -132,7 +127,6 @@ export const SubscriptionsPage: React.FC = () => {
           Who listens to what - subscription monitoring and analysis
         </p>
       </div>
-
 
       {/* Subscription Churn Chart */}
       <div style={{ marginBottom: '32px' }}>

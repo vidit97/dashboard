@@ -4,21 +4,16 @@ import { useGlobalState } from '../hooks/useGlobalState'
 import { ActiveSubscriptions } from '../../ui/ActiveSubscriptions'
 import { SubscriptionState } from '../../ui/SubscriptionState'
 
-export const TopicsPage: React.FC = () => {
+export const V2TopicsPage: React.FC = () => {
   const { state } = useGlobalState()
 
   return (
-    <div style={{
-      width: '100%',
-      padding: '16px',
-      minHeight: '100%',
-      boxSizing: 'border-box'
-    }}>
+    <div>
       {/* Page Header */}
       <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ 
-          fontSize: '32px', 
-          fontWeight: '700', 
+        <h1 style={{
+          fontSize: '32px',
+          fontWeight: '700',
           color: '#1f2937',
           margin: '0 0 8px 0'
         }}>
@@ -36,7 +31,7 @@ export const TopicsPage: React.FC = () => {
       {/* Subscription Analytics Row */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))',
         gap: '24px',
         marginBottom: '32px'
       }}>

@@ -6,7 +6,7 @@ const DEFAULT_STATE: GlobalState = {
   autoRefresh: false,
   refreshInterval: 15, // seconds
   searchTerm: '',
-  sidebarOpen: true,
+  sidebarOpen: false, // CLOSED BY DEFAULT
   showOriginalNavbar: false // Hidden by default
 }
 

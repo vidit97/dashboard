@@ -29,7 +29,7 @@ export const V1App: React.FC = () => {
     style.textContent = `
       /* V1 Dashboard Responsive Styles */
       html, body {
-        overflow: hidden !important;
+        overflow: auto !important;
         height: 100% !important;
         margin: 0 !important;
         padding: 0 !important;
@@ -38,7 +38,7 @@ export const V1App: React.FC = () => {
       .v1-dashboard {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         height: 100vh;
-        overflow: hidden;
+        overflow: visible;
       }
       
       /* Ensure no horizontal overflow */

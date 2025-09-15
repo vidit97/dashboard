@@ -9,6 +9,7 @@ import { ACLPage } from './pages/ACLPage'
 import { ToastProvider } from './components/Toast'
 import { LeftSidebar } from './components/LeftSidebar'
 import { V1App } from './v1/V1App'
+import { V2App } from './v2/V2App'
 import './components/LeftSidebar.css'
 
 const AppContent = () => {
@@ -17,6 +18,7 @@ const AppContent = () => {
   const [showOriginalNavbar, setShowOriginalNavbar] = useState(false); // Hidden by default
   
   const isV1Route = location.pathname.startsWith('/v1');
+  const isV2Route = location.pathname.startsWith('/v2');
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
@@ -65,19 +67,19 @@ const AppContent = () => {
 
   return (
     <div className="app-container">
-      {/* Left Sidebar - only show on non-V1 routes */}
-      {!isV1Route && <LeftSidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />}
+      {/* Left Sidebar - only show on non-V1/V2 routes */}
+      {!isV1Route && !isV2Route && <LeftSidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />}
       
       <div className="main-content">
         {/* Top Navigation - conditionally show based on route and user preference */}
-        {(!isV1Route || showOriginalNavbar) && (
+        {((!isV1Route && !isV2Route) || showOriginalNavbar) && (
           <nav className="nav-bar" style={{ 
             position: isV1Route ? 'relative' : undefined,
             zIndex: isV1Route ? 1000 : undefined 
           }}>
             <div className="nav-container">
-              {/* Hamburger menu for sidebar toggle - only on non-V1 routes */}
-              {!isV1Route && (
+              {/* Hamburger menu for sidebar toggle - only on non-V1/V2 routes */}
+              {!isV1Route && !isV2Route && (
                 <button 
                   className="hamburger-menu always-visible" 
                   onClick={toggleSidebar}
@@ -146,8 +148,8 @@ const AppContent = () => {
                 >
                   ACL Management
                 </NavLink>
-                <NavLink 
-                  to="/v1" 
+                <NavLink
+                  to="/v1"
                   className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
                   style={{
                     background: 'linear-gradient(45deg, #3b82f6, #8b5cf6)',
@@ -158,25 +160,45 @@ const AppContent = () => {
                 >
                   🚀 V1 Dashboard
                 </NavLink>
+                <NavLink
+                  to="/v2"
+                  className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
+                  style={{
+                    background: 'linear-gradient(45deg, #10b981, #3b82f6)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    fontWeight: '700'
+                  }}
+                >
+                  ⚡ V2 Dashboard
+                </NavLink>
               </div>
             </div>
           </nav>
         )}
 
         {/* Routes */}
-        <div className="page-content" style={{ 
-          paddingTop: isV1Route && !showOriginalNavbar ? '0' : undefined 
-        }}>
+        {isV2Route ? (
+          // V2 routes - full screen with no wrapper
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/gre" element={<GreDashboard />} />
-            <Route path="/client-topics" element={<ClientTopicPage />} />
-            <Route path="/api-tables" element={<ApiTablesPage />} />
-            <Route path="/topics" element={<TopicManagement />} />
-            <Route path="/acl" element={<ACLPage />} />
-            <Route path="/v1/*" element={<V1App />} />
+            <Route path="/v2/*" element={<V2App />} />
           </Routes>
-        </div>
+        ) : (
+          // V1 and legacy routes - with existing wrapper
+          <div className="page-content" style={{
+            paddingTop: isV1Route && !showOriginalNavbar ? '0' : undefined
+          }}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/gre" element={<GreDashboard />} />
+              <Route path="/client-topics" element={<ClientTopicPage />} />
+              <Route path="/api-tables" element={<ApiTablesPage />} />
+              <Route path="/topics" element={<TopicManagement />} />
+              <Route path="/acl" element={<ACLPage />} />
+              <Route path="/v1/*" element={<V1App />} />
+            </Routes>
+          </div>
+        )}
       </div>
     </div>
   );
