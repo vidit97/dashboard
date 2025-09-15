@@ -25,11 +25,11 @@ export const SubscriptionState = ({ className }: SubscriptionStateProps) => {
   const [loadingClients, setLoadingClients] = useState(false)
   const [topicClients, setTopicClients] = useState<ClientSubscription[]>([])
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (forceRefresh = false) => {
     try {
       setLoading(true)
       setError(null)
-      const result = await GreApiService.getActiveSubscriptions()
+      const result = await GreApiService.getActiveSubscriptions(undefined, forceRefresh)
 
       setData({
         topicBreakdown: result.topicBreakdown,
@@ -85,7 +85,7 @@ export const SubscriptionState = ({ className }: SubscriptionStateProps) => {
   }, [selectedTopic, fetchTopicClients])
 
   const handleRefresh = useCallback(async () => {
-    await fetchData()
+    await fetchData(true) // Force refresh when user clicks refresh button
     if (selectedTopic) {
       await fetchTopicClients(selectedTopic)
     }

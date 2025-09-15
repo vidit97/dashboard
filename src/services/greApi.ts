@@ -33,7 +33,7 @@ import {
 
 const greApi = axios.create({
   baseURL: GRE_API_CONFIG.BASE_URL,
-  timeout: 30000, // Increased to 30 seconds for large datasets
+  timeout: 60000, // Increased to 60 seconds for large datasets with 5000+ records
   headers: {
     'Content-Type': 'application/json',
     'Prefer': 'count=exact'
@@ -41,6 +41,19 @@ const greApi = axios.create({
 })
 
 export class GreApiService {
+  // Cache for active subscriptions to prevent duplicate API calls when multiple components load simultaneously
+  private static activeSubscriptionsCache: {
+    data: { subscriptions: Subscription[], topicBreakdown: TopicSubscription[], totalCount: number } | null
+    timestamp: number
+    promise: Promise<{ subscriptions: Subscription[], topicBreakdown: TopicSubscription[], totalCount: number }> | null
+  } = {
+    data: null,
+    timestamp: 0,
+    promise: null
+  }
+
+  private static readonly CACHE_DURATION_MS = 2 * 60 * 1000 // 2 minutes cache
+
   // Get all sessions
   static async getAllSessions(): Promise<Session[]> {
     try {
@@ -891,63 +904,106 @@ export class GreApiService {
     }
   }
 
-  // Get total count of active subscriptions first
-  static async getActiveSubscriptionsCount(): Promise<number> {
+  // OPTIMIZED: Get active subscriptions with topic aggregation - single API call with count + caching
+  static async getActiveSubscriptions(limit?: number, forceRefresh = false): Promise<{ subscriptions: Subscription[], topicBreakdown: TopicSubscription[], totalCount: number }> {
     try {
-      const response = await greApi.get(
-        `${GRE_API_CONFIG.ENDPOINTS.SUBSCRIPTIONS}?active=is.true&select=id`,
-        { headers: { 'Prefer': 'count=exact' } }
-      )
-      return parseInt(response.headers['content-range']?.split('/')[1] || '0')
-    } catch (error) {
-      console.error('Error fetching active subscriptions count:', error)
-      throw new Error('Failed to fetch active subscriptions count')
-    }
-  }
+      const now = Date.now()
 
-  // Get active subscriptions with topic aggregation (with optional limit for large datasets)
-  static async getActiveSubscriptions(limit?: number): Promise<{ subscriptions: Subscription[], topicBreakdown: TopicSubscription[], totalCount: number }> {
-    try {
-      // Get total count first
-      const totalCount = await this.getActiveSubscriptionsCount()
-      
-      // If count is very large and no limit specified, set a reasonable limit
-      const effectiveLimit = limit || (totalCount > 10000 ? 5000 : undefined)
-      
-      const query = `${GRE_API_CONFIG.ENDPOINTS.SUBSCRIPTIONS}?active=is.true&order=updated_at.desc${effectiveLimit ? `&limit=${effectiveLimit}` : ''}`
-      const response = await greApi.get<Subscription[]>(query)
-      
-      const subscriptions = response.data
-      
-      // Aggregate by topic
-      const topicMap = new Map<string, TopicSubscription>()
-      
-      subscriptions.forEach(sub => {
-        if (!topicMap.has(sub.topic)) {
-          topicMap.set(sub.topic, {
-            topic: sub.topic,
-            count: 0,
-            qos_breakdown: {},
-            clients: []
-          })
-        }
-        
-        const topicData = topicMap.get(sub.topic)!
-        topicData.count++
-        topicData.qos_breakdown[sub.qos] = (topicData.qos_breakdown[sub.qos] || 0) + 1
-        if (!topicData.clients.includes(sub.client)) {
-          topicData.clients.push(sub.client)
-        }
-      })
-      
-      const topicBreakdown = Array.from(topicMap.values())
-        .sort((a, b) => b.count - a.count)
-      
-      return { subscriptions, topicBreakdown, totalCount }
+      // Check cache first (unless force refresh requested)
+      if (!forceRefresh && this.activeSubscriptionsCache.data &&
+          (now - this.activeSubscriptionsCache.timestamp) < this.CACHE_DURATION_MS) {
+        console.log('Returning cached active subscriptions data')
+        return this.activeSubscriptionsCache.data
+      }
+
+      // If there's already a request in progress, wait for it
+      if (!forceRefresh && this.activeSubscriptionsCache.promise) {
+        console.log('Waiting for existing active subscriptions request to complete')
+        return await this.activeSubscriptionsCache.promise
+      }
+
+      console.log('Fetching active subscriptions with optimized single API call...')
+
+      // Create the promise for the API call
+      const apiCall = this.fetchActiveSubscriptionsData(limit)
+
+      // Store the promise to prevent duplicate requests
+      this.activeSubscriptionsCache.promise = apiCall
+
+      try {
+        const result = await apiCall
+
+        // Cache the result
+        this.activeSubscriptionsCache.data = result
+        this.activeSubscriptionsCache.timestamp = now
+        this.activeSubscriptionsCache.promise = null
+
+        return result
+      } catch (error) {
+        // Clear the promise on error so retries are allowed
+        this.activeSubscriptionsCache.promise = null
+        throw error
+      }
     } catch (error) {
       console.error('Error fetching active subscriptions:', error)
       throw new Error('Failed to fetch active subscriptions')
     }
+  }
+
+  // Private method to perform the actual API call
+  private static async fetchActiveSubscriptionsData(limit?: number): Promise<{ subscriptions: Subscription[], topicBreakdown: TopicSubscription[], totalCount: number }> {
+    // Set smart limit: if no limit specified, use 5000 as a reasonable default for performance
+    // For the topics page showing "Top 10", we don't need all 5031 records - a sample is sufficient
+    const effectiveLimit = limit || 5000
+
+    const query = `${GRE_API_CONFIG.ENDPOINTS.SUBSCRIPTIONS}?active=is.true&order=updated_at.desc&limit=${effectiveLimit}`
+
+    // Single API call with count header to get both data and total count
+    const response = await greApi.get<Subscription[]>(query, {
+      headers: { 'Prefer': 'count=exact' }
+    })
+
+    const subscriptions = response.data
+
+    // Parse total count from Content-Range header (format: "0-4999/5031")
+    let totalCount = subscriptions.length // fallback to actual data length
+    const contentRange = response.headers['content-range'] || response.headers['Content-Range']
+    if (contentRange) {
+      const match = contentRange.match(/\/(\d+)$/)
+      if (match) {
+        totalCount = parseInt(match[1], 10)
+      }
+    }
+
+    console.log(`Loaded ${subscriptions.length} subscriptions from total ${totalCount} active subscriptions`)
+
+    // Aggregate by topic - this gives us the top topics from the most recent subscriptions
+    const topicMap = new Map<string, TopicSubscription>()
+
+    subscriptions.forEach(sub => {
+      if (!topicMap.has(sub.topic)) {
+        topicMap.set(sub.topic, {
+          topic: sub.topic,
+          count: 0,
+          qos_breakdown: {},
+          clients: []
+        })
+      }
+
+      const topicData = topicMap.get(sub.topic)!
+      topicData.count++
+      topicData.qos_breakdown[sub.qos] = (topicData.qos_breakdown[sub.qos] || 0) + 1
+      if (!topicData.clients.includes(sub.client)) {
+        topicData.clients.push(sub.client)
+      }
+    })
+
+    const topicBreakdown = Array.from(topicMap.values())
+      .sort((a, b) => b.count - a.count)
+
+    console.log(`Processed ${topicBreakdown.length} unique topics from subscription data`)
+
+    return { subscriptions, topicBreakdown, totalCount }
   }
 
   // Get subscription state (who's subscribed to what)

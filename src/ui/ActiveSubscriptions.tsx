@@ -17,11 +17,17 @@ export const ActiveSubscriptions = ({ className }: ActiveSubscriptionsProps) => 
   const [error, setError] = useState<string | null>(null)
   const [showTopN, setShowTopN] = useState(10)
 
-  const fetchData = useCallback(async () => {
+  // Topic selection state
+  const [displayMode, setDisplayMode] = useState<'topN' | 'custom'>('topN')
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([])
+  const [topicSearchInput, setTopicSearchInput] = useState('')
+  const [showTopicDropdown, setShowTopicDropdown] = useState(false)
+
+  const fetchData = useCallback(async (forceRefresh = false) => {
     try {
       setLoading(true)
       setError(null)
-      const result = await GreApiService.getActiveSubscriptions()
+      const result = await GreApiService.getActiveSubscriptions(undefined, forceRefresh)
       setData(result)
     } catch (err) {
       console.error('Error fetching active subscriptions:', err)
@@ -35,14 +41,72 @@ export const ActiveSubscriptions = ({ className }: ActiveSubscriptionsProps) => 
     fetchData()
   }, [fetchData])
 
-  const chartData = data.topicBreakdown
-    .slice(0, showTopN)
-    .map(item => ({
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!(event.target as Element)?.closest('.topic-selector-dropdown')) {
+        setShowTopicDropdown(false)
+      }
+    }
+
+    if (showTopicDropdown) {
+      document.addEventListener('click', handleClickOutside)
+      return () => document.removeEventListener('click', handleClickOutside)
+    }
+  }, [showTopicDropdown])
+
+  // Compute chart data based on display mode
+  const chartData = React.useMemo(() => {
+    let filteredTopics: TopicSubscription[] = []
+
+    if (displayMode === 'topN') {
+      filteredTopics = data.topicBreakdown.slice(0, showTopN)
+    } else {
+      // Custom selection mode - show only selected topics in their original order
+      filteredTopics = selectedTopics
+        .map(topicName => data.topicBreakdown.find(t => t.topic === topicName))
+        .filter(Boolean) as TopicSubscription[]
+    }
+
+    return filteredTopics.map(item => ({
       topic: item.topic.length > 25 ? item.topic.substring(0, 25) + '...' : item.topic,
       fullTopic: item.topic,
       count: item.count,
       clients: item.clients.length
     }))
+  }, [data.topicBreakdown, displayMode, showTopN, selectedTopics])
+
+  // Available topics for selection (filtered by search)
+  const availableTopics = React.useMemo(() => {
+    return data.topicBreakdown
+      .filter(topic =>
+        topicSearchInput === '' ||
+        topic.topic.toLowerCase().includes(topicSearchInput.toLowerCase())
+      )
+      .filter(topic => !selectedTopics.includes(topic.topic))
+      .slice(0, 20) // Limit dropdown size
+  }, [data.topicBreakdown, topicSearchInput, selectedTopics])
+
+  // Handle topic selection
+  const handleAddTopic = (topicName: string) => {
+    if (!selectedTopics.includes(topicName) && selectedTopics.length < 10) {
+      setSelectedTopics(prev => [...prev, topicName])
+      setTopicSearchInput('')
+      setShowTopicDropdown(false)
+    }
+  }
+
+  const handleRemoveTopic = (topicName: string) => {
+    setSelectedTopics(prev => prev.filter(t => t !== topicName))
+  }
+
+  const handleModeChange = (mode: 'topN' | 'custom') => {
+    setDisplayMode(mode)
+    if (mode === 'custom' && selectedTopics.length === 0) {
+      // Auto-select top 5 topics when switching to custom mode
+      setSelectedTopics(data.topicBreakdown.slice(0, 5).map(t => t.topic))
+    }
+  }
 
   const qosDescriptions = {
     0: 'At most once',
@@ -93,19 +157,114 @@ export const ActiveSubscriptions = ({ className }: ActiveSubscriptionsProps) => 
               Real-time view of active MQTT subscriptions by topic
             </p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <select
-              value={showTopN}
-              onChange={(e) => setShowTopN(Number(e.target.value))}
-              className="control-select"
-            >
-              <option value={5}>Top 5</option>
-              <option value={10}>Top 10</option>
-              <option value={20}>Top 20</option>
-              <option value={50}>Top 50</option>
-            </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {/* Display Mode Toggle */}
+            <div style={{ display: 'flex', background: '#f3f4f6', borderRadius: '6px', padding: '2px' }}>
+              <button
+                onClick={() => handleModeChange('topN')}
+                style={{
+                  padding: '4px 8px',
+                  background: displayMode === 'topN' ? '#3b82f6' : 'transparent',
+                  color: displayMode === 'topN' ? 'white' : '#374151',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  fontWeight: displayMode === 'topN' ? '500' : 'normal'
+                }}
+              >
+                Top N
+              </button>
+              <button
+                onClick={() => handleModeChange('custom')}
+                style={{
+                  padding: '4px 8px',
+                  background: displayMode === 'custom' ? '#3b82f6' : 'transparent',
+                  color: displayMode === 'custom' ? 'white' : '#374151',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  fontWeight: displayMode === 'custom' ? '500' : 'normal'
+                }}
+              >
+                Custom
+              </button>
+            </div>
+
+            {/* Top N Selector */}
+            {displayMode === 'topN' && (
+              <select
+                value={showTopN}
+                onChange={(e) => setShowTopN(Number(e.target.value))}
+                className="control-select"
+              >
+                <option value={5}>Top 5</option>
+                <option value={10}>Top 10</option>
+                <option value={20}>Top 20</option>
+                <option value={50}>Top 50</option>
+              </select>
+            )}
+
+            {/* Custom Topic Selector */}
+            {displayMode === 'custom' && (
+              <div className="topic-selector-dropdown" style={{ position: 'relative', minWidth: '200px' }}>
+                <input
+                  type="text"
+                  placeholder="Search and add topics..."
+                  value={topicSearchInput}
+                  onChange={(e) => setTopicSearchInput(e.target.value)}
+                  onFocus={() => setShowTopicDropdown(true)}
+                  style={{
+                    padding: '6px 8px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    width: '100%'
+                  }}
+                />
+
+                {/* Topic Dropdown */}
+                {showTopicDropdown && availableTopics.length > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: 'white',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    zIndex: 1000,
+                    maxHeight: '200px',
+                    overflowY: 'auto'
+                  }}>
+                    {availableTopics.map((topic) => (
+                      <div
+                        key={topic.topic}
+                        onClick={() => handleAddTopic(topic.topic)}
+                        style={{
+                          padding: '8px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #f3f4f6',
+                          fontSize: '12px'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                      >
+                        <div style={{ fontWeight: '500' }}>{topic.topic}</div>
+                        <div style={{ color: '#6b7280', fontSize: '11px' }}>
+                          {topic.count} subscriptions, {topic.clients.length} clients
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <button
-              onClick={fetchData}
+              onClick={() => fetchData(true)}
               disabled={loading}
               className={`control-button ${loading ? 'disabled' : ''}`}
             >
@@ -113,6 +272,69 @@ export const ActiveSubscriptions = ({ className }: ActiveSubscriptionsProps) => 
             </button>
           </div>
         </div>
+
+        {/* Selected Topics Display (only in custom mode) */}
+        {displayMode === 'custom' && selectedTopics.length > 0 && (
+          <div style={{ marginTop: '12px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+              Selected Topics ({selectedTopics.length}/10):
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {selectedTopics.map((topic) => {
+                const topicData = data.topicBreakdown.find(t => t.topic === topic)
+                return (
+                  <div
+                    key={topic}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      backgroundColor: '#dbeafe',
+                      color: '#1e40af',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      gap: '4px',
+                      maxWidth: '200px'
+                    }}
+                  >
+                    <span style={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      flex: 1
+                    }} title={topic}>
+                      {topic}
+                    </span>
+                    {topicData && (
+                      <span style={{ fontSize: '10px', opacity: 0.8 }}>
+                        ({topicData.count})
+                      </span>
+                    )}
+                    <button
+                      onClick={() => handleRemoveTopic(topic)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'inherit',
+                        cursor: 'pointer',
+                        padding: '0',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        lineHeight: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -134,7 +356,10 @@ export const ActiveSubscriptions = ({ className }: ActiveSubscriptionsProps) => 
         {/* Chart Section */}
         <div style={{ marginBottom: '20px' }}>
           <h4 className="section-title">
-            Subscriptions by Topic (Top {showTopN})
+            {displayMode === 'topN'
+              ? `Subscriptions by Topic (Top ${showTopN})`
+              : `Subscriptions by Topic (${selectedTopics.length} selected)`
+            }
           </h4>
           <div className="chart-container">
             <ResponsiveContainer width="100%" height="100%">
@@ -187,7 +412,10 @@ export const ActiveSubscriptions = ({ className }: ActiveSubscriptionsProps) => 
                 </tr>
               </thead>
               <tbody>
-                {data.topicBreakdown.slice(0, showTopN).map((topic, index) => (
+                {(displayMode === 'topN'
+                  ? data.topicBreakdown.slice(0, showTopN)
+                  : selectedTopics.map(topicName => data.topicBreakdown.find(t => t.topic === topicName)).filter(Boolean) as TopicSubscription[]
+                ).map((topic, index) => (
                   <tr key={topic.topic}>
                     <td>
                       <div className="topic-name" title={topic.topic}>

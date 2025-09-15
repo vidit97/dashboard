@@ -6,6 +6,7 @@ import { formatUptime, formatMetric } from '../../services/api'
 import TrafficChart from '../../ui/TrafficChart'
 import ConnectionsChart from '../../ui/ConnectionsChart'
 import StorageChart from '../../ui/StorageChart'
+import TrafficConnectionsChart from '../../ui/TrafficConnectionsChart'
 import { SummaryCards } from '../../components/SummaryCards'
 import { DetailedActivityFeed } from '../../v1/components/DetailedActivityFeed'
 
@@ -318,7 +319,25 @@ export const V2OverviewPage: React.FC = () => {
 
       {/* Charts Section */}
       <div style={{ marginBottom: '32px' }}>
-        {/* Top Row - Two Charts Side by Side */}
+        {/* Top Row - Combined Chart Full Width */}
+        <div style={{
+          background: 'white',
+          borderRadius: '12px',
+          border: '1px solid #e5e7eb',
+          padding: '20px',
+          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+          minHeight: '450px',
+          marginBottom: '24px'
+        }}>
+          <TrafficConnectionsChart
+            broker={state.broker}
+            refreshInterval={30}
+            autoRefresh={false}
+            className=""
+          />
+        </div>
+
+        {/* Second Row - Two Charts Side by Side */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))',
