@@ -235,7 +235,7 @@ export const V2OverviewPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Charts Section - PROPERLY CONTAINED */}
+      {/* Charts Section - FIXED: Single containers without nested divs */}
       <div style={{ marginBottom: '40px', width: '100%' }}>
         {/* Charts Row - Two Charts Side by Side */}
         <div style={{
@@ -245,64 +245,42 @@ export const V2OverviewPage: React.FC = () => {
           marginBottom: '24px',
           width: '100%'
         }}>
-          {/* Traffic Chart Container */}
+          {/* Traffic Chart Container - SINGLE BOX */}
           <div style={{
             background: 'white',
             borderRadius: '12px',
             border: '1px solid #e5e7eb',
             boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
             padding: '24px',
-            minHeight: '450px',
-            boxSizing: 'border-box',
-            display: 'flex',
-            flexDirection: 'column'
+            minHeight: '500px'
           }}>
-            <div style={{
-              width: '100%',
-              height: '100%',
-              minHeight: '400px',
-              position: 'relative',
-              overflow: 'auto'
-            }}>
-              <TrafficChart
-                broker={state.broker}
-                refreshInterval={30}
-                autoRefresh={false}
-                className=""
-              />
-            </div>
+            <TrafficChart
+              broker={state.broker}
+              refreshInterval={30}
+              autoRefresh={false}
+              className=""
+            />
           </div>
           
-          {/* Connections Chart Container */}
+          {/* Connections Chart Container - SINGLE BOX */}
           <div style={{
             background: 'white',
             borderRadius: '12px',
             border: '1px solid #e5e7eb',
             boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
             padding: '24px',
-            minHeight: '450px',
-            boxSizing: 'border-box',
-            display: 'flex',
-            flexDirection: 'column'
+            minHeight: '500px'
           }}>
-            <div style={{
-              width: '100%',
-              height: '100%',
-              minHeight: '400px',
-              position: 'relative',
-              overflow: 'auto'
-            }}>
-              <ConnectionsChart
-                broker={state.broker}
-                refreshInterval={30}
-                autoRefresh={false}
-                className=""
-              />
-            </div>
+            <ConnectionsChart
+              broker={state.broker}
+              refreshInterval={30}
+              autoRefresh={false}
+              className=""
+            />
           </div>
         </div>
 
-        {/* Storage Chart Row */}
+        {/* Storage Chart Row - SINGLE BOX */}
         <div style={{
           width: '100%',
           maxWidth: '50%'
@@ -313,25 +291,14 @@ export const V2OverviewPage: React.FC = () => {
             border: '1px solid #e5e7eb',
             boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
             padding: '24px',
-            minHeight: '450px',
-            boxSizing: 'border-box',
-            display: 'flex',
-            flexDirection: 'column'
+            minHeight: '500px'
           }}>
-            <div style={{
-              width: '100%',
-              height: '100%',
-              minHeight: '400px',
-              position: 'relative',
-              overflow: 'auto'
-            }}>
-              <StorageChart
-                broker={state.broker}
-                refreshInterval={30}
-                autoRefresh={false}
-                className=""
-              />
-            </div>
+            <StorageChart
+              broker={state.broker}
+              refreshInterval={30}
+              autoRefresh={false}
+              className=""
+            />
           </div>
         </div>
       </div>

@@ -138,32 +138,6 @@ export default function TrafficChart({ broker, refreshInterval = 30, autoRefresh
     })
   }
 
-  const generateMockData = (): ChartDataPoint[] => {
-    const now = Math.floor(Date.now() / 1000)
-    const points: ChartDataPoint[] = []
-    
-    // Generate 60 data points (15 minutes of data with 15s intervals)
-    for (let i = 59; i >= 0; i--) {
-      const timestamp = now - (i * 15) // 15 second intervals
-      const time = formatTimestamp(timestamp)
-      
-      // Generate realistic mock data with some variation
-      const baseTime = (60 - i) / 60 // 0 to 1 over time
-      const variation = Math.sin(baseTime * Math.PI * 4) * 0.3 + Math.random() * 0.2 - 0.1
-      
-      points.push({
-        timestamp,
-        time,
-        messages_sent_per_sec_1m: Math.max(0, 50 + variation * 30 + Math.sin(baseTime * Math.PI * 2) * 20),
-        messages_received_per_sec_1m: Math.max(0, 45 + variation * 25 + Math.cos(baseTime * Math.PI * 3) * 15),
-        bytes_sent_per_sec_1m: Math.max(0, 1500 + variation * 500 + Math.sin(baseTime * Math.PI * 1.5) * 300),
-        bytes_received_per_sec_1m: Math.max(0, 1200 + variation * 400 + Math.cos(baseTime * Math.PI * 2.5) * 250)
-      })
-    }
-    
-    return points
-  }
-
   const fetchTrafficData = useCallback(async () => {
     try {
       setLoading(true)
@@ -262,10 +236,16 @@ export default function TrafficChart({ broker, refreshInterval = 30, autoRefresh
   const customTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="chart-tooltip">
-          <p className="tooltip-label">{`Time: ${label}`}</p>
+        <div style={{
+          backgroundColor: 'white',
+          padding: '10px',
+          border: '1px solid #e5e7eb',
+          borderRadius: '6px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+        }}>
+          <p style={{ margin: '0 0 8px 0', fontWeight: '600' }}>{`Time: ${label}`}</p>
           {payload.map((entry: any, index: number) => (
-            <p key={index} style={{ color: entry.color }}>
+            <p key={index} style={{ color: entry.color, margin: '4px 0' }}>
               {`${entry.name}: ${entry.value.toFixed(2)}`}
             </p>
           ))}
@@ -275,23 +255,43 @@ export default function TrafficChart({ broker, refreshInterval = 30, autoRefresh
     return null
   }
 
+  // REMOVED the outer container - this component now returns ONLY the content
+  // The parent will handle the container styling
   return (
-    <div style={{
-      background: 'white',
-      borderRadius: '12px',
-      border: '1px solid #e5e7eb',
-      padding: '20px',
-      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-      width: '100%',
-      height: '600px',
-      overflow: 'hidden',
-      boxSizing: 'border-box'
-    }}>
-      <div className="chart-header">
-        <h2 className="chart-title">Traffic (Messages + Bytes)</h2>
-        <div className="chart-controls">
+    <>
+      {/* Header with title and controls */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: '20px',
+        flexWrap: 'wrap',
+        gap: '16px'
+      }}>
+        <h2 style={{
+          fontSize: '18px',
+          fontWeight: '600',
+          margin: 0,
+          color: '#1f2937'
+        }}>
+          Traffic (Messages + Bytes)
+        </h2>
+        
+        <div style={{
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'center',
+          flexWrap: 'wrap'
+        }}>
           <select 
-            className="select"
+            style={{
+              padding: '6px 12px',
+              borderRadius: '6px',
+              border: '1px solid #d1d5db',
+              fontSize: '14px',
+              backgroundColor: 'white',
+              cursor: 'pointer'
+            }}
             value={selectedTimeRange.label}
             onChange={(e) => {
               const range = TIME_RANGES.find(r => r.label === e.target.value)
@@ -305,60 +305,119 @@ export default function TrafficChart({ broker, refreshInterval = 30, autoRefresh
             ))}
           </select>
           
-          <button onClick={fetchTrafficData} disabled={loading} className="button-secondary">
+          <button 
+            onClick={fetchTrafficData} 
+            disabled={loading}
+            style={{
+              padding: '6px 16px',
+              borderRadius: '6px',
+              border: '1px solid #d1d5db',
+              fontSize: '14px',
+              backgroundColor: loading ? '#f3f4f6' : 'white',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              transition: 'background-color 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              if (!loading) {
+                e.currentTarget.style.backgroundColor = '#f9fafb'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loading) {
+                e.currentTarget.style.backgroundColor = 'white'
+              }
+            }}
+          >
             {loading ? 'Loading...' : 'Fetch Data'}
           </button>
-          
-          <div className="series-toggles">
-            {TRAFFIC_SERIES_CONFIG.map(series => (
-              <label key={series.key} className="series-toggle">
-                <input
-                  type="checkbox"
-                  checked={visibleSeries[series.key]}
-                  onChange={() => toggleSeries(series.key)}
-                />
-                <span 
-                  className="series-color-indicator" 
-                  style={{ backgroundColor: series.color }}
-                />
-                {series.name}
-              </label>
-            ))}
-          </div>
         </div>
       </div>
 
+      {/* Series toggles */}
+      <div style={{
+        display: 'flex',
+        gap: '16px',
+        marginBottom: '20px',
+        flexWrap: 'wrap'
+      }}>
+        {TRAFFIC_SERIES_CONFIG.map(series => (
+          <label 
+            key={series.key} 
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              color: '#4b5563'
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={visibleSeries[series.key]}
+              onChange={() => toggleSeries(series.key)}
+              style={{ cursor: 'pointer' }}
+            />
+            <span 
+              style={{
+                width: '12px',
+                height: '12px',
+                borderRadius: '2px',
+                backgroundColor: series.color,
+                flexShrink: 0
+              }}
+            />
+            <span>{series.name}</span>
+          </label>
+        ))}
+      </div>
+
       {error && (
-        <div className="error-message">
+        <div style={{
+          backgroundColor: '#fef2f2',
+          color: '#dc2626',
+          padding: '12px',
+          borderRadius: '6px',
+          marginBottom: '16px',
+          border: '1px solid #fecaca'
+        }}>
           Error: {error}
         </div>
       )}
 
-      <div className="chart-container" style={{ marginTop: '20px', width: '100%', height: '480px', overflow: 'hidden' }}>
+      {/* Chart */}
+      <div style={{ width: '100%', height: '400px' }}>
         {trafficData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={480}>
-            <LineChart data={trafficData} margin={{ top: 10, right: 20, left: 60, bottom: 60 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart 
+              data={trafficData} 
+              margin={{ top: 10, right: 30, left: 60, bottom: 80 }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis 
                 dataKey="time"
                 tick={{ fontSize: 11 }}
-                interval={Math.max(0, Math.floor(trafficData.length / 6))}
+                interval={Math.max(0, Math.floor(trafficData.length / 8))}
                 angle={-45}
                 textAnchor="end"
-                height={55}
+                height={60}
                 axisLine={{ stroke: '#d1d5db' }}
                 tickLine={{ stroke: '#d1d5db' }}
-                label={{ value: 'Time', position: 'insideBottom', offset: -10 }}
               />
               <YAxis 
                 tick={{ fontSize: 11 }}
                 tickFormatter={customTickFormatter}
                 domain={['dataMin - 5%', 'dataMax + 5%']}
                 allowDataOverflow={false}
-                width={55}
+                width={60}
                 axisLine={{ stroke: '#d1d5db' }}
                 tickLine={{ stroke: '#d1d5db' }}
-                label={{ value: 'Rate', angle: -90, position: 'insideLeft' }}
+                label={{ 
+                  value: 'Rate per second', 
+                  angle: -90, 
+                  position: 'insideLeft',
+                  style: { fontSize: 12, fill: '#6b7280' }
+                }}
               />
               <Tooltip content={customTooltip} />
               
@@ -379,11 +438,17 @@ export default function TrafficChart({ broker, refreshInterval = 30, autoRefresh
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <div className="chart-placeholder">
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            color: '#6b7280'
+          }}>
             {loading ? 'Loading traffic data...' : 'No traffic data available'}
           </div>
         )}
       </div>
-    </div>
+    </>
   )
 }
