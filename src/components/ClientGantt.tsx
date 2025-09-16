@@ -48,7 +48,7 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
-  const [useMockData, setUseMockData] = useState(false)
+  const [useMockData, setUseMockData] = useState(false) // Hidden from UI but kept for internal testing
 
   // Smart filtering state - tracks which clients to show
   const [selectedClientIds, setSelectedClientIds] = useState([])
@@ -475,29 +475,41 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
             <option value="24h">Last 24 Hours</option>
             <option value="7d">Last 7 Days</option>
           </select>
-          <button onClick={fetchGanttData} disabled={loading} className="button-secondary">
+          <button 
+            onClick={fetchGanttData} 
+            disabled={loading} 
+            style={{
+              padding: '8px 16px',
+              borderRadius: '6px',
+              border: '1px solid #6b7280',
+              fontSize: '14px',
+              fontWeight: '500',
+              backgroundColor: loading ? '#f3f4f6' : '#ffffff',
+              color: loading ? '#9ca3af' : '#374151',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              if (!loading) {
+                e.currentTarget.style.backgroundColor = '#f3f4f6'
+                e.currentTarget.style.borderColor = '#374151'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loading) {
+                e.currentTarget.style.backgroundColor = '#ffffff'
+                e.currentTarget.style.borderColor = '#6b7280'
+              }
+            }}
+          >
             {loading ? 'Loading...' : 'Refresh'}
           </button>
-          <label className="mock-data-toggle">
-            <input
-              type="checkbox"
-              checked={useMockData}
-              onChange={(e) => setUseMockData(e.target.checked)}
-            />
-            Use Mock Data
-          </label>
         </div>
       </div>
 
-      {error && !useMockData && (
+      {error && (
         <div className="error-message">
           Error: {error}
-          <button 
-            onClick={() => setUseMockData(true)}
-            style={{ marginLeft: '8px', fontSize: '12px', padding: '4px 8px' }}
-          >
-            Use Mock Data
-          </button>
         </div>
       )}
       
@@ -886,7 +898,6 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
       {lastUpdated && (
         <div className="last-updated">
           Last updated: {lastUpdated.toLocaleString()}
-          {useMockData && <span style={{ color: '#f59e0b' }}> (Using Mock Data)</span>}
         </div>
       )}
 

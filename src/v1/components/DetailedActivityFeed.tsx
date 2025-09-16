@@ -17,6 +17,7 @@ const debounce = <T extends (...args: any[]) => void>(func: T, delay: number): T
 interface DetailedActivityFeedProps {
   className?: string
   refreshInterval?: number
+  hideSearch?: boolean
 }
 
 // Use the ApiEvent type from our API types
@@ -52,9 +53,10 @@ const TIME_RANGES = [
   { label: '24 Hours', value: '24h', hours: 24 }
 ] as const
 
-export const DetailedActivityFeed: React.FC<DetailedActivityFeedProps> = ({ 
-  className = '', 
-  refreshInterval = 30
+export const DetailedActivityFeed: React.FC<DetailedActivityFeedProps> = ({
+  className = '',
+  refreshInterval = 30,
+  hideSearch = false
 }) => {
   // Mobile detection
   const [isMobile, setIsMobile] = useState(false)
@@ -443,34 +445,36 @@ export const DetailedActivityFeed: React.FC<DetailedActivityFeedProps> = ({
             <option value="unknown">Unknown</option>
           </select>
           
-          {/* Search Toggle Button */}
-          <button
-            onClick={() => setIsSearchExpanded(!isSearchExpanded)}
-            style={{
-              padding: '6px 12px',
-              fontSize: '12px',
-              background: isSearchExpanded ? '#3b82f6' : '#f3f4f6',
-              color: isSearchExpanded ? 'white' : '#374151',
-              border: '1px solid #e5e7eb',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}
-          >
-            🔍 Search
-            {(filters.clientSearch || filters.topicSearch || filters.usernameSearch) && (
-              <span style={{
-                background: 'rgba(239, 68, 68, 0.8)',
-                color: 'white',
-                borderRadius: '50%',
-                width: '6px',
-                height: '6px',
-                fontSize: '6px'
-              }} />
-            )}
-          </button>
+          {/* Search Toggle Button - conditionally rendered */}
+          {!hideSearch && (
+            <button
+              onClick={() => setIsSearchExpanded(!isSearchExpanded)}
+              style={{
+                padding: '6px 12px',
+                fontSize: '12px',
+                background: isSearchExpanded ? '#3b82f6' : '#f3f4f6',
+                color: isSearchExpanded ? 'white' : '#374151',
+                border: '1px solid #e5e7eb',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              🔍 Search
+              {(filters.clientSearch || filters.topicSearch || filters.usernameSearch) && (
+                <span style={{
+                  background: 'rgba(239, 68, 68, 0.8)',
+                  color: 'white',
+                  borderRadius: '50%',
+                  width: '6px',
+                  height: '6px',
+                  fontSize: '6px'
+                }} />
+              )}
+            </button>
+          )}
         </div>
         
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>

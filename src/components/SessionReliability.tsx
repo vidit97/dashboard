@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer
 } from 'recharts'
 import { MetricCard } from '../ui/StatCards'
 import { GreApiService, formatDuration } from '../services/greApi'
 import { SessionDuration } from '../config/greApi'
+import { CHART_STYLES } from '../config/chartConfig'
 
 interface SessionReliabilityProps {
   className?: string
@@ -37,7 +38,6 @@ export default function SessionReliability({ className, refreshInterval = 180 }:
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   const processSessionData = useCallback((sessions: SessionDuration[]) => {
     if (sessions.length === 0) {
@@ -144,7 +144,6 @@ export default function SessionReliability({ className, refreshInterval = 180 }:
       console.log(`Fetched ${sessions.length} sessions`)
       setSessionData(sessions)
       processSessionData(sessions)
-      setLastUpdated(new Date())
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to fetch session data'
       setError(errorMsg)
@@ -161,25 +160,149 @@ export default function SessionReliability({ className, refreshInterval = 180 }:
     return () => clearInterval(interval)
   }, [fetchSessionData, refreshInterval])
 
+  // REMOVED the outer container - returning ONLY the content
+  // The parent component handles the container styling
   return (
-    <div className={`chart-section ${className || ''}`}>
-      <div className="chart-header">
-        <h2 className="chart-title">Session Reliability (Last 7 Days)</h2>
-        <div className="chart-controls">
-          <button onClick={fetchSessionData} disabled={loading} className="button-secondary">
-            {loading ? 'Loading...' : 'Refresh'}
-          </button>
-        </div>
+    <>
+      {/* Header with title and controls */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: '16px',
+        flexWrap: 'wrap',
+        gap: '12px'
+      }}>
+        <h2 style={{
+          fontSize: '18px',
+          fontWeight: '600',
+          margin: 0,
+          color: '#1f2937'
+        }}>
+          Session Reliability (Last 7 Days)
+        </h2>
+
+        <button
+          onClick={fetchSessionData}
+          disabled={loading}
+          style={{
+            padding: '8px 16px',
+            borderRadius: '6px',
+            border: '1px solid #6b7280',
+            fontSize: '14px',
+            fontWeight: '500',
+            backgroundColor: loading ? '#f3f4f6' : '#ffffff',
+            color: loading ? '#9ca3af' : '#374151',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            if (!loading) {
+              e.currentTarget.style.backgroundColor = '#f3f4f6'
+              e.currentTarget.style.borderColor = '#374151'
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!loading) {
+              e.currentTarget.style.backgroundColor = '#ffffff'
+              e.currentTarget.style.borderColor = '#6b7280'
+            }
+          }}
+        >
+          {loading ? 'Loading...' : 'Refresh'}
+        </button>
       </div>
 
       {error && (
-        <div className="error-message">
+        <div style={{
+          backgroundColor: '#fef2f2',
+          color: '#dc2626',
+          padding: '12px',
+          borderRadius: '6px',
+          marginBottom: '16px',
+          border: '1px solid #fecaca'
+        }}>
           Error: {error}
         </div>
       )}
 
-      {/* Statistics Cards */}
-      <div className="reliability-stats">
+      {/* Chart - Moved to top */}
+      {!loading && histogramData.length > 0 && (
+        <>
+          <h3 style={{
+            fontSize: '16px',
+            fontWeight: '600',
+            color: '#1f2937',
+            marginBottom: '16px',
+            marginTop: '0'
+          }}>
+            Session Duration Distribution
+          </h3>
+
+          <div style={{ width: '100%', height: '350px', marginBottom: '20px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={histogramData}
+                margin={{ top: 10, right: 30, left: 20, bottom: 60 }}
+                barCategoryGap="20%"
+              >
+                <CartesianGrid strokeDasharray={CHART_STYLES.cartesianGrid.strokeDasharray} stroke={CHART_STYLES.cartesianGrid.stroke} />
+                <XAxis
+                  dataKey="range"
+                  tick={{ fontSize: 11 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                  interval={0}
+                  axisLine={{ stroke: '#d1d5db' }}
+                  tickLine={{ stroke: '#d1d5db' }}
+                />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  allowDecimals={false}
+                  domain={['dataMin - 10%', 'dataMax + 15%']}
+                  width={50}
+                  axisLine={{ stroke: '#d1d5db' }}
+                  tickLine={{ stroke: '#d1d5db' }}
+                />
+                <Tooltip
+                  formatter={(value: number, name: string) => [`${value} sessions`, name]}
+                  labelFormatter={(label: string) => `Duration: ${label}`}
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div style={CHART_STYLES.tooltip}>
+                          <p style={CHART_STYLES.tooltipLabel}>{`Duration: ${label}`}</p>
+                          {payload.map((entry: any, index: number) => (
+                            <p key={index} style={{ color: entry.color, ...CHART_STYLES.tooltipValue }}>
+                              {`${entry.value} sessions`}
+                            </p>
+                          ))}
+                        </div>
+                      )
+                    }
+                    return null
+                  }}
+                />
+                <Bar
+                  dataKey="count"
+                  fill="#3b82f6"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={60}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </>
+      )}
+
+      {/* Statistics Cards - Moved after chart */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+        gap: '12px',
+        marginBottom: '16px'
+      }}>
         <MetricCard
           label="Total Sessions"
           value={stats.total.toString()}
@@ -207,71 +330,18 @@ export default function SessionReliability({ className, refreshInterval = 180 }:
         />
       </div>
 
-      {/* Histogram Chart */}
-      {!loading && histogramData.length > 0 && (
-        <div className="session-histogram">
-          <h3 className="breakdown-title">Session Duration Distribution</h3>
-          <div className="chart-container">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart 
-                data={histogramData} 
-                margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
-                barCategoryGap="20%"
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis 
-                  dataKey="range" 
-                  stroke="#6b7280"
-                  fontSize={12}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                  interval={0}
-                />
-                <YAxis 
-                  stroke="#6b7280" 
-                  fontSize={12}
-                  allowDecimals={false}
-                  domain={[0, 'dataMax']}
-                />
-                <Tooltip 
-                  formatter={(value: number, name: string) => [`${value} sessions`, name]}
-                  labelFormatter={(label: string) => `Duration: ${label}`}
-                  contentStyle={{
-                    backgroundColor: '#ffffff',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                  }}
-                />
-                <Bar 
-                  dataKey="count" 
-                  fill="#3b82f6"
-                  radius={[4, 4, 0, 0]}
-                  maxBarSize={60}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
       {!loading && sessionData.length === 0 && (
-        <div className="no-data">
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '200px',
+          color: '#6b7280',
+          fontSize: '16px'
+        }}>
           No session data available for the last 7 days
         </div>
       )}
-
-      {lastUpdated && (
-        <div className="last-updated">
-          Last updated: {lastUpdated.toLocaleString()}
-          {sessionData.length > 0 && (
-            <span style={{ color: '#10b981', marginLeft: '8px' }}>
-              • {sessionData.length} sessions analyzed
-            </span>
-          )}
-        </div>
-      )}
-    </div>
+    </>
   )
 }

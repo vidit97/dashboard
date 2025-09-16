@@ -390,21 +390,36 @@ export const V2SessionsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Session Components Row */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-        gap: '24px',
-        marginBottom: '32px'
-      }}>
-        <SessionReliability
-          className="session-reliability-chart"
-          refreshInterval={120}
-        />
-        <RecentConnectDisconnects
-          className="recent-connects-chart"
-          refreshInterval={60}
-        />
+      {/* Session Reliability Component - Full Width */}
+      <div style={{ marginBottom: '32px' }}>
+        <div style={{
+          background: 'white',
+          borderRadius: '12px',
+          padding: '24px',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+        }}>
+          <SessionReliability
+            className="session-reliability-chart"
+            refreshInterval={120}
+          />
+        </div>
+      </div>
+
+      {/* Recent Connects/Disconnects Component - Full Width */}
+      <div style={{ marginBottom: '32px' }}>
+        <div style={{
+          background: 'white',
+          borderRadius: '12px',
+          padding: '24px',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+        }}>
+          <RecentConnectDisconnects
+            className="recent-connects-chart"
+            refreshInterval={60}
+          />
+        </div>
       </div>
 
       {/* Client Gantt Chart */}

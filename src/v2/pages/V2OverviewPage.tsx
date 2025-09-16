@@ -328,6 +328,7 @@ export const V2OverviewPage: React.FC = () => {
 
         <DetailedActivityFeed
           refreshInterval={state.autoRefresh ? 30 : 0}
+          hideSearch={true}
         />
       </div>
     </div>
