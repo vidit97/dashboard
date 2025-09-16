@@ -4,6 +4,7 @@ import type { Subscription, TopicSubscription } from '../config/greApi'
 
 interface SubscriptionStateProps {
   className?: string
+  refreshTrigger?: number // Used to trigger refresh from parent
 }
 
 interface ClientSubscription {
@@ -13,7 +14,7 @@ interface ClientSubscription {
   session_id: number | null
 }
 
-export const SubscriptionState = ({ className }: SubscriptionStateProps) => {
+export const SubscriptionState = ({ className, refreshTrigger }: SubscriptionStateProps) => {
   const [data, setData] = useState({
     topicBreakdown: [] as TopicSubscription[],
     totalCount: 0
@@ -75,6 +76,13 @@ export const SubscriptionState = ({ className }: SubscriptionStateProps) => {
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  // Listen for refresh trigger changes
+  useEffect(() => {
+    if (refreshTrigger && refreshTrigger > 0) {
+      fetchData(true) // Force refresh when trigger changes
+    }
+  }, [refreshTrigger, fetchData])
 
   useEffect(() => {
     if (selectedTopic) {

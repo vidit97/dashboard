@@ -65,141 +65,69 @@ export function SummaryCards({ loading, broker }: SummaryCardsProps) {
         </div>
       )}
 
-      {lastFetched && (
-        <div style={{ 
-          textAlign: 'center', 
-          marginBottom: '16px', 
-          color: '#6b7280', 
-          fontSize: '13px' 
-        }}>
-          Last updated: {lastFetched.toLocaleString()}
-        </div>
-      )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
         {/* Messages Sent */}
-        <div style={{ 
+        <div style={{
           padding: '20px',
-          background: '#ffffff',
-          borderRadius: '8px',
-          border: '1px solid #e5e7eb'
+          background: '#f9fafb',
+          borderRadius: '12px',
+          border: '1px solid #e5e7eb',
+          textAlign: 'center'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>24h Messages Sent</span>
-            <div style={{ width: '32px', height: '32px', background: '#f3f4f6', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-              📤
-            </div>
-          </div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#111827', marginBottom: '4px' }}>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#111827', marginBottom: '8px' }}>
             {rollupLoading ? '--' : rollupData ? formatLargeNumber(rollupData.msgs_sent_total_24h) : '--'}
           </div>
-          <div style={{ fontSize: '13px', color: '#6b7280' }}>
-            Total messages published
+          <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+            24h Messages Sent
           </div>
         </div>
 
         {/* Messages Received */}
-        <div style={{ 
+        <div style={{
           padding: '20px',
-          background: '#ffffff',
-          borderRadius: '8px',
-          border: '1px solid #e5e7eb'
+          background: '#f9fafb',
+          borderRadius: '12px',
+          border: '1px solid #e5e7eb',
+          textAlign: 'center'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>24h Messages Received</span>
-            <div style={{ width: '32px', height: '32px', background: '#f3f4f6', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-              📥
-            </div>
-          </div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#111827', marginBottom: '4px' }}>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#111827', marginBottom: '8px' }}>
             {rollupLoading ? '--' : rollupData ? formatLargeNumber(rollupData.msgs_received_total_24h) : '--'}
           </div>
-          <div style={{ fontSize: '13px', color: '#6b7280' }}>
-            Total messages consumed
+          <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+            24h Messages Received
           </div>
         </div>
 
         {/* Bytes Sent */}
-        <div style={{ 
+        <div style={{
           padding: '20px',
-          background: '#ffffff',
-          borderRadius: '8px',
-          border: '1px solid #e5e7eb'
+          background: '#f9fafb',
+          borderRadius: '12px',
+          border: '1px solid #e5e7eb',
+          textAlign: 'center'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>24h Data Sent</span>
-            <div style={{ width: '32px', height: '32px', background: '#f3f4f6', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-              ⬆️
-            </div>
-          </div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#111827', marginBottom: '4px' }}>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#111827', marginBottom: '8px' }}>
             {rollupLoading ? '--' : rollupData ? formatMetric(rollupData.bytes_sent_total_24h, 'bytes') : '--'}
           </div>
-          <div style={{ fontSize: '13px', color: '#6b7280' }}>
-            Total bytes transmitted
+          <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+            24h Data Sent
           </div>
         </div>
 
         {/* Bytes Received */}
-        <div style={{ 
+        <div style={{
           padding: '20px',
-          background: '#ffffff',
-          borderRadius: '8px',
-          border: '1px solid #e5e7eb'
+          background: '#f9fafb',
+          borderRadius: '12px',
+          border: '1px solid #e5e7eb',
+          textAlign: 'center'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>24h Data Received</span>
-            <div style={{ width: '32px', height: '32px', background: '#f3f4f6', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-              ⬇️
-            </div>
-          </div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#111827', marginBottom: '4px' }}>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#111827', marginBottom: '8px' }}>
             {rollupLoading ? '--' : rollupData ? formatMetric(rollupData.bytes_received_total_24h, 'bytes') : '--'}
           </div>
-          <div style={{ fontSize: '13px', color: '#6b7280' }}>
-            Total bytes received
-          </div>
-        </div>
-
-        {/* Average Connections */}
-        <div style={{ 
-          padding: '20px',
-          background: '#ffffff',
-          borderRadius: '8px',
-          border: '1px solid #e5e7eb'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>Avg Connections</span>
-            <div style={{ width: '32px', height: '32px', background: '#f3f4f6', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-              📊
-            </div>
-          </div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#111827', marginBottom: '4px' }}>
-            {rollupLoading ? '--' : rollupData ? rollupData.avg_connections_24h.toFixed(1) : '--'}
-          </div>
-          <div style={{ fontSize: '13px', color: '#6b7280' }}>
-            24-hour average clients
-          </div>
-        </div>
-
-        {/* Peak Connections */}
-        <div style={{ 
-          padding: '20px',
-          background: '#ffffff',
-          borderRadius: '8px',
-          border: '1px solid #e5e7eb'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>Peak Connections</span>
-            <div style={{ width: '32px', height: '32px', background: '#f3f4f6', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-              📈
-            </div>
-          </div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#111827', marginBottom: '4px' }}>
-            {rollupLoading ? '--' : rollupData ? rollupData.peak_connections_24h.toString() : '--'}
-          </div>
-          <div style={{ fontSize: '13px', color: '#6b7280' }}>
-            Highest concurrent clients
+          <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+            24h Data Received
           </div>
         </div>
       </div>

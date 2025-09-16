@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import axios from 'axios'
 import { useGlobalState } from '../hooks/useGlobalState'
+import { useManualRefresh } from '../hooks/useManualRefresh'
 import { Event as ApiEvent } from '../../types/api'
 
 // Get API base URL
@@ -553,6 +554,15 @@ export const V2EventsPage: React.FC = () => {
       return () => clearInterval(interval)
     }
   }, [fetchEvents, currentPage, state.autoRefresh, state.refreshInterval])
+
+  // Manual refresh function
+  const handleManualRefresh = useCallback(() => {
+    fetchEvents(currentPage)
+    fetchAvailableActions(true) // Also refresh actions
+  }, [fetchEvents, currentPage, fetchAvailableActions])
+
+  // Listen for manual refresh events
+  useManualRefresh(handleManualRefresh, 'Events')
 
   // Fetch available actions on mount and periodically refresh
   useEffect(() => {

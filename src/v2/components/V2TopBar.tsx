@@ -117,11 +117,15 @@ export const V2TopBar: React.FC<V2TopBarProps> = ({
           Auto-refresh
         </label>
 
-        {/* Now Button */}
+        {/* Manual Refresh Button */}
         <button
           onClick={() => {
-            // Trigger refresh of all components
-            window.dispatchEvent(new CustomEvent('forceRefresh'))
+            // Trigger refresh of all components on the current page
+            window.dispatchEvent(new CustomEvent('manualRefresh', {
+              detail: { timestamp: new Date().toISOString() }
+            }))
+            // Also update global state to track last manual refresh
+            updateState({ lastUpdated: new Date() })
           }}
           style={{
             padding: '6px 12px',
@@ -132,12 +136,16 @@ export const V2TopBar: React.FC<V2TopBarProps> = ({
             fontSize: '14px',
             fontWeight: '500',
             cursor: 'pointer',
-            transition: 'background 0.2s ease'
+            transition: 'background 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
           }}
           onMouseEnter={(e) => e.currentTarget.style.background = '#059669'}
           onMouseLeave={(e) => e.currentTarget.style.background = '#10b981'}
+          title="Refresh current page data"
         >
-          Now
+          🔄 Refresh
         </button>
 
         {/* Back to V1 */}

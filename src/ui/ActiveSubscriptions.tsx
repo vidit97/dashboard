@@ -5,9 +5,10 @@ import type { Subscription, TopicSubscription } from '../config/greApi'
 
 interface ActiveSubscriptionsProps {
   className?: string
+  refreshTrigger?: number // Used to trigger refresh from parent
 }
 
-export const ActiveSubscriptions = ({ className }: ActiveSubscriptionsProps) => {
+export const ActiveSubscriptions = ({ className, refreshTrigger }: ActiveSubscriptionsProps) => {
   const [data, setData] = useState({
     subscriptions: [] as Subscription[],
     topicBreakdown: [] as TopicSubscription[],
@@ -40,6 +41,13 @@ export const ActiveSubscriptions = ({ className }: ActiveSubscriptionsProps) => 
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  // Listen for refresh trigger changes
+  useEffect(() => {
+    if (refreshTrigger && refreshTrigger > 0) {
+      fetchData(true) // Force refresh when trigger changes
+    }
+  }, [refreshTrigger, fetchData])
 
   // Close dropdown when clicking outside
   useEffect(() => {

@@ -1476,6 +1476,8 @@ button:disabled {
 .chart-container {
   width: 100% !important;
   max-width: 100% !important;
+  height: auto !important;
+  min-height: 480px !important;
   overflow: hidden;
 }
 

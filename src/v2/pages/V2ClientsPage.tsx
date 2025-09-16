@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useGlobalState } from '../hooks/useGlobalState'
+import { useManualRefresh } from '../hooks/useManualRefresh'
 import { MetricCard } from '../../ui/StatCards'
 import { GreApiService } from '../../services/greApi'
 import { Session, Client, Subscription } from '../../types/api'
@@ -25,21 +26,25 @@ export const V2ClientsPage: React.FC = () => {
   const [clients, setClients] = useState<ClientWithSession[]>([])
   const [filteredClients, setFilteredClients] = useState<ClientWithSession[]>([])
   const [selectedClient, setSelectedClient] = useState<ClientWithSession | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [metricsLoading, setMetricsLoading] = useState(true)
+  const [clientsLoading, setClientsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [totalClientsCount, setTotalClientsCount] = useState(0)
 
   // Filter states
   const [searchText, setSearchText] = useState('')
+  const [debouncedSearchText, setDebouncedSearchText] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed'>('all')
   const [currentPage, setCurrentPage] = useState(0)
   const [pageSize] = useState(20)
+  const searchTimeoutRef = useRef<number | null>(null)
+  const prevDebouncedSearchRef = useRef<string>('')
 
   // Optimized approach: Load metrics first, then paginated table data
   const fetchMetricsData = useCallback(async () => {
     try {
-      setLoading(true)
+      setMetricsLoading(true)
       setError(null)
 
       // Get all active sessions for metrics only
@@ -71,90 +76,194 @@ export const V2ClientsPage: React.FC = () => {
       setError(errorMsg)
       console.error('Error fetching metrics data:', err)
     } finally {
-      setLoading(false)
+      setMetricsLoading(false)
     }
   }, [])
 
-  // Load paginated clients with lazy session/subscription loading
-  const loadClientsPage = useCallback(async (page: number = 0) => {
+  // Load paginated clients with lazy session/subscription loading and filters
+  const loadClientsPage = useCallback(async (page: number = 0, searchFilter: string = '', statusFilterValue: 'all' | 'open' | 'closed' = 'all') => {
     try {
-      setLoading(true)
+      setClientsLoading(true)
       
       const offset = page * pageSize
-      
-      // Get paginated clients
-      const clientsResult = await GreApiService.getClientsPaginated({
-        limit: pageSize,
-        offset: offset
-      })
 
-      // Get client IDs for this page
-      const clientIds = clientsResult.data.map(c => c.client)
-      
-      // Fetch sessions only for these clients using PostgREST 'in' filter
-      const sessionsResult = await GreApiService.getSessionsPaginated({
-        limit: 1000, // Should be enough for current page clients
-        offset: 0,
-        filters: { 
-          'end_ts': 'is.null', // Only active sessions
-          'client': `in.(${clientIds.join(',')})` // Only for current page clients
+      if (statusFilterValue === 'open') {
+        // For open sessions, start with active sessions and get client info
+        const sessionFilters: Record<string, string> = {
+          'end_ts': 'is.null'
         }
-      })
-
-      // Fetch subscriptions only for these clients
-      const subscriptionsResult = await GreApiService.getSubscriptionsPaginated({
-        limit: 1000,
-        offset: 0,
-        filters: { 
-          'active': 'eq.true',
-          'client': `in.(${clientIds.join(',')})` // Only for current page clients
+        
+        // Add username filter to sessions if provided
+        if (searchFilter && searchFilter.trim()) {
+          const escaped = searchFilter.replace(/([%_])/g, '\\$1')
+          sessionFilters['username'] = `ilike.*${escaped}*`
         }
-      })
 
-      // Create lookup maps for current page
-      const sessionsMap = new Map<string, Session>()
-      sessionsResult.data.forEach(session => {
-        sessionsMap.set(session.client, session)
-      })
+        const sessionsResult = await GreApiService.getSessionsPaginated({
+          limit: pageSize,
+          offset: offset,
+          filters: sessionFilters
+        })
 
-      const clientSubscriptionsMap = new Map<string, Subscription[]>()
-      subscriptionsResult.data.forEach(subscription => {
-        if (!clientSubscriptionsMap.has(subscription.client)) {
-          clientSubscriptionsMap.set(subscription.client, [])
+        if (sessionsResult.data.length === 0) {
+          setClients([])
+          setTotalClientsCount(sessionsResult.totalCount)
+          return
         }
-        clientSubscriptionsMap.get(subscription.client)?.push(subscription)
-      })
 
-      // Build enhanced clients for current page
-      const enhancedClients: ClientWithSession[] = clientsResult.data.map(client => {
-        const session = sessionsMap.get(client.client)
-        const clientSubscriptions = clientSubscriptionsMap.get(client.client) || []
+        // Get client details for these sessions
+        const clientIds = sessionsResult.data.map(s => s.client)
+        const clientsResult = await GreApiService.getClientsPaginated({
+          limit: 1000,
+          offset: 0,
+          filters: { 'client': `in.(${clientIds.join(',')})` }
+        })
 
-        return {
-          ...client,
-          session_state: session ? 'open' : 'closed',
-          last_seen: client.last_seen,
-          ip_port: session ? `${session.ip_address || 'N/A'}:${session.port || 'N/A'}` : 'N/A',
-          protocol_ver: session?.protocol_version || 'N/A',
-          keepalive: session?.keepalive || null,
-          subs_count: clientSubscriptions.length,
-          pubs_24h: 0,
-          bytes_24h: 0,
-          drops_24h: 0,
-          current_session: session,
-          active_subscriptions: clientSubscriptions
+        // Get subscriptions for these clients
+        const subscriptionsResult = await GreApiService.getSubscriptionsPaginated({
+          limit: 1000,
+          offset: 0,
+          filters: { 
+            'active': 'eq.true',
+            'client': `in.(${clientIds.join(',')})`
+          }
+        })
+
+        // Create lookup maps
+        const clientsMap = new Map<string, Client>()
+        clientsResult.data.forEach(client => {
+          clientsMap.set(client.client, client)
+        })
+
+        const clientSubscriptionsMap = new Map<string, Subscription[]>()
+        subscriptionsResult.data.forEach(subscription => {
+          if (!clientSubscriptionsMap.has(subscription.client)) {
+            clientSubscriptionsMap.set(subscription.client, [])
+          }
+          clientSubscriptionsMap.get(subscription.client)?.push(subscription)
+        })
+
+        // Build enhanced clients from sessions
+        const enhancedClients: ClientWithSession[] = sessionsResult.data.map(session => {
+          const client = clientsMap.get(session.client)
+          const clientSubscriptions = clientSubscriptionsMap.get(session.client) || []
+
+          return {
+            id: client?.id || 0,
+            client: session.client,
+            username: session.username || '',
+            first_seen: client?.first_seen || session.start_ts,
+            last_seen: client?.last_seen || session.start_ts,
+            session_state: 'open' as const,
+            ip_port: `${session.ip_address || 'N/A'}:${session.port || 'N/A'}`,
+            protocol_ver: session.protocol_version || 'N/A',
+            keepalive: session.keepalive || null,
+            subs_count: clientSubscriptions.length,
+            pubs_24h: 0,
+            bytes_24h: 0,
+            drops_24h: 0,
+            current_session: session,
+            active_subscriptions: clientSubscriptions
+          }
+        })
+
+        setClients(enhancedClients)
+        setTotalClientsCount(sessionsResult.totalCount)
+
+      } else {
+        // For 'all' or 'closed', start with clients
+        const clientFilters: Record<string, string> = {}
+        
+        // Add username search filter if provided
+        if (searchFilter && searchFilter.trim()) {
+          const escaped = searchFilter.replace(/([%_])/g, '\\$1')
+          clientFilters['username'] = `ilike.*${escaped}*`
         }
-      })
 
-      setClients(enhancedClients)
-      setTotalClientsCount(clientsResult.totalCount)
+        const clientsResult = await GreApiService.getClientsPaginated({
+          limit: pageSize,
+          offset: offset,
+          filters: clientFilters
+        })
+
+        const clientIds = clientsResult.data.map(c => c.client)
+        
+        if (clientIds.length === 0) {
+          setClients([])
+          setTotalClientsCount(clientsResult.totalCount)
+          return
+        }
+
+        // Get active sessions for these clients
+        const sessionsResult = await GreApiService.getSessionsPaginated({
+          limit: 1000,
+          offset: 0,
+          filters: { 
+            'end_ts': 'is.null',
+            'client': `in.(${clientIds.join(',')})`
+          }
+        })
+
+        // Get subscriptions for these clients
+        const subscriptionsResult = await GreApiService.getSubscriptionsPaginated({
+          limit: 1000,
+          offset: 0,
+          filters: { 
+            'active': 'eq.true',
+            'client': `in.(${clientIds.join(',')})`
+          }
+        })
+
+        // Create lookup maps
+        const sessionsMap = new Map<string, Session>()
+        sessionsResult.data.forEach(session => {
+          sessionsMap.set(session.client, session)
+        })
+
+        const clientSubscriptionsMap = new Map<string, Subscription[]>()
+        subscriptionsResult.data.forEach(subscription => {
+          if (!clientSubscriptionsMap.has(subscription.client)) {
+            clientSubscriptionsMap.set(subscription.client, [])
+          }
+          clientSubscriptionsMap.get(subscription.client)?.push(subscription)
+        })
+
+        // Build enhanced clients
+        let enhancedClients: ClientWithSession[] = clientsResult.data.map(client => {
+          const session = sessionsMap.get(client.client)
+          const clientSubscriptions = clientSubscriptionsMap.get(client.client) || []
+
+          return {
+            ...client,
+            session_state: session ? 'open' : 'closed',
+            last_seen: client.last_seen,
+            ip_port: session ? `${session.ip_address || 'N/A'}:${session.port || 'N/A'}` : 'N/A',
+            protocol_ver: session?.protocol_version || 'N/A',
+            keepalive: session?.keepalive || null,
+            subs_count: clientSubscriptions.length,
+            pubs_24h: 0,
+            bytes_24h: 0,
+            drops_24h: 0,
+            current_session: session,
+            active_subscriptions: clientSubscriptions
+          }
+        })
+
+        // Apply status filter for 'closed' sessions
+        if (statusFilterValue === 'closed') {
+          enhancedClients = enhancedClients.filter(client => client.session_state === 'closed')
+        }
+
+        setClients(enhancedClients)
+        setTotalClientsCount(clientsResult.totalCount)
+      }
       
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to fetch clients page data'
       setError(errorMsg)
       console.error('Error fetching clients page:', err)
     } finally {
-      setLoading(false)
+      setClientsLoading(false)
     }
   }, [pageSize])
 
@@ -206,13 +315,35 @@ export const V2ClientsPage: React.FC = () => {
     }
   }, [])
 
-  // Combined data fetching
-  const fetchClientsData = useCallback(async () => {
-    await Promise.all([
-      fetchMetricsData(),
-      loadClientsPage(currentPage)
-    ])
-  }, [fetchMetricsData, loadClientsPage, currentPage])
+  // Debounce search input and trigger search directly
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+
+    searchTimeoutRef.current = window.setTimeout(() => {
+      // Only trigger search if the text actually changed
+      if (prevDebouncedSearchRef.current !== searchText) {
+        prevDebouncedSearchRef.current = searchText
+        setDebouncedSearchText(searchText)
+        
+        // Reset to first page and load data
+        setCurrentPage(0)
+        loadClientsPage(0, searchText, statusFilter)
+      }
+    }, 300) // 300ms delay
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [searchText, statusFilter, loadClientsPage])
+
+  // Separate data fetching for metrics and client table
+  const refreshCurrentClientPage = useCallback(async () => {
+    await loadClientsPage(currentPage, debouncedSearchText, statusFilter)
+  }, [loadClientsPage, currentPage, debouncedSearchText, statusFilter])
 
   // With new pagination approach, we manage filtered clients differently
   // For now, we'll keep this simple and not implement client-side filtering
@@ -221,20 +352,51 @@ export const V2ClientsPage: React.FC = () => {
     setFilteredClients(clients)
   }, [clients])
 
+  // Load initial data on component mount
   useEffect(() => {
-    fetchClientsData()
+    // Load both metrics and client data initially
+    fetchMetricsData()
+    loadClientsPage(0, '', 'all') // Start with empty search and all status
+  }, [fetchMetricsData, loadClientsPage]) // Run on mount
 
-    // Only set up interval if auto-refresh is enabled
-    if (state.autoRefresh) {
-      const interval = setInterval(fetchClientsData, state.refreshInterval * 1000)
-      return () => clearInterval(interval)
-    }
-  }, [fetchClientsData, state.autoRefresh, state.refreshInterval])
+  // Set up auto-refresh - only refresh metrics automatically, not client table
+  useEffect(() => {
+    if (!state.autoRefresh) return
+
+    const interval = setInterval(() => {
+      // Only refresh metrics automatically to avoid disrupting user's table interactions
+      fetchMetricsData()
+    }, state.refreshInterval * 1000)
+
+    return () => clearInterval(interval)
+  }, [state.autoRefresh, state.refreshInterval, fetchMetricsData])
+
+  // Listen for manual refresh events - refresh both metrics and current client page
+  useManualRefresh(useCallback(async () => {
+    await Promise.all([
+      fetchMetricsData(),
+      refreshCurrentClientPage()
+    ])
+  }, [fetchMetricsData, refreshCurrentClientPage]), 'Clients')
 
   // Handle page changes
   const handlePageChange = (newPage: number) => {
     setCurrentPage(newPage)
-    loadClientsPage(newPage)
+    loadClientsPage(newPage, searchText, statusFilter) // Use current search text
+  }
+
+  // Handle filter changes
+  const handleSearchChange = (newSearchText: string) => {
+    setSearchText(newSearchText)
+    // Don't immediately call loadClientsPage - let the debounce effect handle it
+    // Only reset page to 0 when the search text actually changes the results
+  }
+
+  const handleStatusFilterChange = (newStatusFilter: 'all' | 'open' | 'closed') => {
+    setStatusFilter(newStatusFilter)
+    setCurrentPage(0) // Reset to first page
+    // Only reload client data, NOT metrics
+    loadClientsPage(0, searchText, newStatusFilter) // Use current search text, not debounced
   }
 
   const totalPages = Math.ceil(totalClientsCount / pageSize)
@@ -280,14 +442,14 @@ export const V2ClientsPage: React.FC = () => {
         <MetricCard
           label="Connected Users"
           value={connectedUsersCount.toString()}
-          loading={loading}
+          loading={metricsLoading}
           color="#10b981"
           unit="users"
         />
       </div>
 
       {/* Top Users Section */}
-      {!loading && topUsers.length > 0 && (
+      {!metricsLoading && topUsers.length > 0 && (
         <div style={{
           background: 'white',
           borderRadius: '12px',
@@ -375,7 +537,12 @@ export const V2ClientsPage: React.FC = () => {
             {error}
           </div>
           <button
-            onClick={fetchClientsData}
+            onClick={async () => {
+              await Promise.all([
+                fetchMetricsData(),
+                refreshCurrentClientPage()
+              ])
+            }}
             style={{
               marginTop: '12px',
               padding: '8px 16px',
@@ -407,9 +574,9 @@ export const V2ClientsPage: React.FC = () => {
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
           <input
             type="text"
-            placeholder="Search clients, usernames..."
+            placeholder="Search usernames..."
             value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             style={{
               padding: '8px 16px',
               paddingRight: searchText ? '40px' : '16px',
@@ -421,7 +588,7 @@ export const V2ClientsPage: React.FC = () => {
           />
           {searchText && (
             <button
-              onClick={() => setSearchText('')}
+              onClick={() => handleSearchChange('')}
               style={{
                 position: 'absolute',
                 right: '8px',
@@ -441,7 +608,7 @@ export const V2ClientsPage: React.FC = () => {
 
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as 'all' | 'open' | 'closed')}
+          onChange={(e) => handleStatusFilterChange(e.target.value as 'all' | 'open' | 'closed')}
           style={{
             padding: '8px 16px',
             border: '1px solid #d1d5db',
@@ -455,8 +622,20 @@ export const V2ClientsPage: React.FC = () => {
         </select>
 
         <div style={{ fontSize: '14px', color: '#6b7280' }}>
-          {totalClientsCount} client{totalClientsCount !== 1 ? 's' : ''} total
-          {/* Note: Search filtering would need to be implemented server-side for this optimized approach */}
+          {debouncedSearchText ? (
+            <>
+              Showing results for "{debouncedSearchText}"
+              {statusFilter !== 'all' && (
+                <span style={{ marginLeft: '8px' }}>
+                  • {statusFilter} sessions only
+                </span>
+              )}
+            </>
+          ) : statusFilter !== 'all' ? (
+            `Showing ${statusFilter} sessions only`
+          ) : (
+            `${totalClientsCount} client${totalClientsCount !== 1 ? 's' : ''} total`
+          )}
         </div>
       </div>
 
@@ -493,7 +672,7 @@ export const V2ClientsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
+                {clientsLoading ? (
                   <tr>
                     <td colSpan={8} style={{ padding: '32px', textAlign: 'center', color: '#6b7280' }}>
                       Loading clients...
@@ -575,7 +754,7 @@ export const V2ClientsPage: React.FC = () => {
           </div>
 
           {/* Pagination */}
-          {!loading && totalClientsCount > pageSize && (
+          {!clientsLoading && totalClientsCount > pageSize && (
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',

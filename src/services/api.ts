@@ -147,5 +147,37 @@ export const watchMQTTService = {
       params: { broker }
     })
     return response.data
+  },
+
+  // Get traffic timeseries data for the last 5 minutes (for trend tiles)
+  async getTrafficTimeseries(
+    broker: string = API_CONFIG.DEFAULT_BROKER,
+    minutes: number = 5
+  ): Promise<TrafficData> {
+    try {
+      const to = Math.floor(Date.now() / 1000)
+      const from = to - (minutes * 60)
+      
+      console.log(`Making timeseries traffic API call to: ${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.TRAFFIC}`, { broker, from, to })
+      const response = await api.get(API_CONFIG.ENDPOINTS.TRAFFIC, {
+        params: { broker, from, to }
+      })
+      console.log('Timeseries traffic API response:', response.data)
+      return response.data
+    } catch (error) {
+      console.error('Timeseries traffic API call failed:', error)
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNABORTED') {
+          throw new Error('Request timeout - API server may be slow')
+        }
+        if (error.response) {
+          throw new Error(`API Error: ${error.response.status} - ${error.response.statusText}`)
+        }
+        if (error.request) {
+          throw new Error('Network error - Check if API server is reachable')
+        }
+      }
+      throw error
+    }
   }
 }

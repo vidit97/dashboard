@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useGlobalState } from '../hooks/useGlobalState'
+import { useManualRefresh } from '../hooks/useManualRefresh'
 import { watchMQTTService } from '../../services/api'
 import { OverviewData, API_CONFIG } from '../../config/api'
 import { formatUptime, formatMetric } from '../../services/api'
@@ -9,6 +10,8 @@ import StorageChart from '../../ui/StorageChart'
 import TrafficConnectionsChart from '../../ui/TrafficConnectionsChart'
 import { SummaryCards } from '../../components/SummaryCards'
 import { DetailedActivityFeed } from '../../v1/components/DetailedActivityFeed'
+import ToggleTrafficTile from '../components/ToggleTrafficTile'
+import ToggleReceivedTile from '../components/ToggleReceivedTile'
 
 export const V2OverviewPage: React.FC = () => {
   const { state } = useGlobalState()
@@ -47,6 +50,9 @@ export const V2OverviewPage: React.FC = () => {
     }
   }, [fetchOverview, state.refreshInterval, state.autoRefresh])
 
+  // Listen for manual refresh events
+  useManualRefresh(fetchOverview, 'Overview')
+
   // Update time every second for real-time feel
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000)
@@ -80,7 +86,7 @@ export const V2OverviewPage: React.FC = () => {
   }
 
   return (
-    <div>
+    <div style={{ width: '100%', overflow: 'hidden' }}>
       {/* Hero Status Section */}
       <div style={{
         background: '#1f2937',
@@ -152,366 +158,205 @@ export const V2OverviewPage: React.FC = () => {
             </div>
             <div style={{ color: '#9ca3af', fontSize: '14px' }}>Active Clients</div>
           </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '24px', fontWeight: '600', marginBottom: '4px', color: '#ffffff' }}>
-              {loading ? '--' : overview?.messages_sent_per_sec_1m ? formatMetric(overview.messages_sent_per_sec_1m, 'rate') : '0'}
-            </div>
-            <div style={{ color: '#9ca3af', fontSize: '14px' }}>Publish Rate</div>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '24px', fontWeight: '600', marginBottom: '4px', color: '#ffffff' }}>
-              {loading ? '--' : overview?.bytes_sent_per_sec_1m ? formatBytes(overview.bytes_sent_per_sec_1m) + '/s' : '0/s'}
-            </div>
-            <div style={{ color: '#9ca3af', fontSize: '14px' }}>Inbound Traffic</div>
-          </div>
         </div>
       </div>
 
-      {/* Main Content Grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '2fr 1fr',
-        gap: '28px',
-        marginBottom: '40px'
-      }}>
-        {/* Left Column - Metrics */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* Performance Metrics */}
-          <div style={{
-            background: 'white',
-            borderRadius: '16px',
-            padding: '28px',
-            border: '1px solid #e5e7eb',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'
-          }}>
-            <h3 style={{
-              margin: '0 0 20px 0',
-              fontSize: '20px',
-              fontWeight: '600',
-              color: '#1f2937',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              ⚡ Real-time Metrics
-            </h3>
-
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '16px'
-            }}>
-              {/* Message Flow */}
-              <div style={{
-                padding: '20px',
-                background: '#ffffff',
-                borderRadius: '8px',
-                border: '1px solid #e5e7eb'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>Messages/sec</span>
-                  <div style={{ width: '32px', height: '32px', background: '#f3f4f6', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-                    📊
-                  </div>
-                </div>
-                <div style={{ fontSize: '28px', fontWeight: '700', color: '#111827', marginBottom: '8px' }}>
-                  {loading ? '--' : overview?.messages_sent_per_sec_1m ? formatMetric(overview.messages_sent_per_sec_1m, 'rate') : '0'}
-                </div>
-                <div style={{ fontSize: '13px', color: '#6b7280' }}>
-                  Sent: {loading ? '--' : overview?.messages_sent_per_sec_1m ? formatMetric(overview.messages_sent_per_sec_1m, 'rate') : '0'} • Recv: {loading ? '--' : overview?.messages_received_per_sec_1m ? formatMetric(overview.messages_received_per_sec_1m, 'rate') : '0'}
-                </div>
-              </div>
-
-              {/* Bytes/sec */}
-              <div style={{
-                padding: '20px',
-                background: '#ffffff',
-                borderRadius: '8px',
-                border: '1px solid #e5e7eb'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>Bytes/sec</span>
-                  <div style={{ width: '32px', height: '32px', background: '#f3f4f6', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-                    🌐
-                  </div>
-                </div>
-                <div style={{ fontSize: '28px', fontWeight: '700', color: '#111827', marginBottom: '8px' }}>
-                  {loading ? '--' : overview?.bytes_sent_per_sec_1m ? formatBytes(overview.bytes_sent_per_sec_1m) + '/s' : '0/s'}
-                </div>
-                <div style={{ fontSize: '13px', color: '#6b7280' }}>
-                  Sent: {loading ? '--' : overview?.bytes_sent_per_sec_1m ? formatBytes(overview.bytes_sent_per_sec_1m) + '/s' : '0/s'} • Recv: {loading ? '--' : overview?.bytes_received_per_sec_1m ? formatBytes(overview.bytes_received_per_sec_1m) + '/s' : '0/s'}
-                </div>
-              </div>
-
-              {/* Subscriptions */}
-              <div style={{
-                padding: '20px',
-                background: '#ffffff',
-                borderRadius: '8px',
-                border: '1px solid #e5e7eb'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>Subscriptions</span>
-                  <div style={{ width: '32px', height: '32px', background: '#f3f4f6', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-                    👥
-                  </div>
-                </div>
-                <div style={{ fontSize: '28px', fontWeight: '700', color: '#111827', marginBottom: '8px' }}>
-                  {loading ? '--' : overview?.subscriptions?.toLocaleString() || '0'}
-                </div>
-                <div style={{ fontSize: '13px', color: '#6b7280' }}>
-                  Active subscriptions
-                </div>
-              </div>
-
-              {/* Retained Messages */}
-              <div style={{
-                padding: '20px',
-                background: '#ffffff',
-                borderRadius: '8px',
-                border: '1px solid #e5e7eb'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>Retained Messages</span>
-                  <div style={{ width: '32px', height: '32px', background: '#f3f4f6', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-                    💾
-                  </div>
-                </div>
-                <div style={{ fontSize: '28px', fontWeight: '700', color: '#111827', marginBottom: '8px' }}>
-                  {loading ? '--' : overview?.retained?.toLocaleString() || '0'}
-                </div>
-                <div style={{ fontSize: '13px', color: '#6b7280' }}>
-                  Messages in storage
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column - Activity Stream */}
-        <div style={{
-          background: 'white',
-          borderRadius: '16px',
-          padding: '28px',
-          border: '1px solid #e5e7eb',
-          height: 'fit-content',
-          position: 'sticky',
-          top: '20px',
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'
-        }}>
-          <h3 style={{
-            margin: '0 0 20px 0',
-            fontSize: '18px',
-            fontWeight: '600',
-            color: '#111827',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            📈 Latest Events (ts, action, client)
-          </h3>
-
-          <DetailedActivityFeed
-            refreshInterval={state.autoRefresh ? 30 : 0}
-          />
-        </div>
-      </div>
-
-      {/* Charts Section */}
-      <div style={{ marginBottom: '32px' }}>
-        {/* Top Row - Combined Chart Full Width */}
-        <div style={{
-          background: 'white',
-          borderRadius: '12px',
-          border: '1px solid #e5e7eb',
-          padding: '20px',
-          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-          minHeight: '650px',
-          marginBottom: '24px'
-        }}>
-          <TrafficConnectionsChart
-            broker={state.broker}
-            refreshInterval={30}
-            autoRefresh={false}
-            className=""
-          />
-        </div>
-
-        {/* Second Row - Two Charts Side by Side */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))',
-          gap: '24px',
-          marginBottom: '24px'
-        }}>
-          <div style={{
-            background: 'white',
-            borderRadius: '12px',
-            border: '1px solid #e5e7eb',
-            padding: '20px',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-            minHeight: '300px'
-          }}>
-            <TrafficChart
-              broker={state.broker}
-              refreshInterval={30}
-              autoRefresh={false}
-              className=""
-            />
-          </div>
-          <div style={{
-            background: 'white',
-            borderRadius: '12px',
-            border: '1px solid #e5e7eb',
-            padding: '20px',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-            minHeight: '300px'
-          }}>
-            <ConnectionsChart
-              broker={state.broker}
-              refreshInterval={30}
-              autoRefresh={false}
-              className=""
-            />
-          </div>
-        </div>
-
-        {/* Bottom Row - Third Chart Full Width */}
-        <div style={{
-          background: 'white',
-          borderRadius: '12px',
-          border: '1px solid #e5e7eb',
-          padding: '20px',
-          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-          minHeight: '300px'
-        }}>
-          <StorageChart
-            broker={state.broker}
-            refreshInterval={30}
-            autoRefresh={false}
-            className=""
-          />
-        </div>
-      </div>
-
-      {/* 24h Summary Section */}
-      <div style={{
-        background: 'white',
-        borderRadius: '16px',
-        padding: '32px',
-        border: '1px solid #e5e7eb',
-        marginBottom: '40px',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'
-      }}>
-        <h3 style={{
-          margin: '0 0 20px 0',
-          fontSize: '20px',
-          fontWeight: '600',
-          color: '#1f2937',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}>
-          📊 24h Summary
-        </h3>
-        <SummaryCards loading={loading} broker={state.broker} />
-      </div>
-
-      {/* Quick Actions */}
+      {/* Real Time Metrics - Full Width */}
       <div style={{
         background: 'white',
         borderRadius: '16px',
         padding: '28px',
         border: '1px solid #e5e7eb',
-        marginBottom: '40px',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+        marginBottom: '40px'
       }}>
         <h3 style={{
-          margin: '0 0 16px 0',
-          fontSize: '18px',
+          margin: '0 0 24px 0',
+          fontSize: '20px',
           fontWeight: '600',
-          color: '#111827'
+          color: '#1f2937'
         }}>
-          Quick Actions
+          ⚡ Real Time Metrics
         </h3>
+
+        {/* Top Row - Toggle Tiles - FIXED RESPONSIVE GRID */}
         <div style={{
-          display: 'flex',
-          gap: '12px',
-          flexWrap: 'wrap'
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))',
+          gap: '24px',
+          marginBottom: '32px'
         }}>
-          <button style={{
-            padding: '12px 20px',
-            background: '#111827',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            fontSize: '14px',
-            fontWeight: '500',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#1f2937'
-            e.currentTarget.style.transform = 'translateY(-1px)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#111827'
-            e.currentTarget.style.transform = 'translateY(0px)'
-          }}>
-            📋 Copy Endpoint
-          </button>
-          <button style={{
-            padding: '12px 20px',
-            background: '#f9fafb',
-            color: '#111827',
-            border: '1px solid #e5e7eb',
-            borderRadius: '6px',
-            fontSize: '14px',
-            fontWeight: '500',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#f3f4f6'
-            e.currentTarget.style.transform = 'translateY(-1px)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#f9fafb'
-            e.currentTarget.style.transform = 'translateY(0px)'
-          }}>
-            💾 Export Data
-          </button>
-          <button style={{
-            padding: '12px 20px',
-            background: '#f9fafb',
-            color: '#111827',
-            border: '1px solid #e5e7eb',
-            borderRadius: '6px',
-            fontSize: '14px',
-            fontWeight: '500',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#f3f4f6'
-            e.currentTarget.style.transform = 'translateY(-1px)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#f9fafb'
-            e.currentTarget.style.transform = 'translateY(0px)'
-          }}>
-            🔧 Configure
-          </button>
+          <ToggleTrafficTile broker={state.broker} />
+          <ToggleReceivedTile broker={state.broker} />
         </div>
+
+        {/* 24h Summary */}
+        <div style={{ marginBottom: '32px' }}>
+          <SummaryCards loading={loading} broker={state.broker} />
+        </div>
+
+        {/* Bottom Row - Additional Metrics */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '20px'
+        }}>
+          {/* Subscriptions */}
+          <div style={{
+            padding: '20px',
+            background: '#f9fafb',
+            borderRadius: '12px',
+            border: '1px solid #e5e7eb',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#111827', marginBottom: '8px' }}>
+              {loading ? '--' : overview?.subscriptions?.toLocaleString() || '0'}
+            </div>
+            <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+              Subscriptions
+            </div>
+          </div>
+
+          {/* Retained Messages */}
+          <div style={{
+            padding: '20px',
+            background: '#f9fafb',
+            borderRadius: '12px',
+            border: '1px solid #e5e7eb',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#111827', marginBottom: '8px' }}>
+              {loading ? '--' : overview?.retained?.toLocaleString() || '0'}
+            </div>
+            <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+              Retained Messages
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Charts Section - PROPERLY CONTAINED */}
+      <div style={{ marginBottom: '40px', width: '100%' }}>
+        {/* Charts Row - Two Charts Side by Side */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 500px), 1fr))',
+          gap: '24px',
+          marginBottom: '24px',
+          width: '100%'
+        }}>
+          {/* Traffic Chart Container */}
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            border: '1px solid #e5e7eb',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+            padding: '24px',
+            minHeight: '450px',
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <div style={{
+              width: '100%',
+              height: '100%',
+              minHeight: '400px',
+              position: 'relative',
+              overflow: 'auto'
+            }}>
+              <TrafficChart
+                broker={state.broker}
+                refreshInterval={30}
+                autoRefresh={false}
+                className=""
+              />
+            </div>
+          </div>
+          
+          {/* Connections Chart Container */}
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            border: '1px solid #e5e7eb',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+            padding: '24px',
+            minHeight: '450px',
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <div style={{
+              width: '100%',
+              height: '100%',
+              minHeight: '400px',
+              position: 'relative',
+              overflow: 'auto'
+            }}>
+              <ConnectionsChart
+                broker={state.broker}
+                refreshInterval={30}
+                autoRefresh={false}
+                className=""
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Storage Chart Row */}
+        <div style={{
+          width: '100%',
+          maxWidth: '50%'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            border: '1px solid #e5e7eb',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+            padding: '24px',
+            minHeight: '450px',
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <div style={{
+              width: '100%',
+              height: '100%',
+              minHeight: '400px',
+              position: 'relative',
+              overflow: 'auto'
+            }}>
+              <StorageChart
+                broker={state.broker}
+                refreshInterval={30}
+                autoRefresh={false}
+                className=""
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Latest Events - Full Width */}
+      <div style={{
+        background: 'white',
+        borderRadius: '16px',
+        padding: '28px',
+        border: '1px solid #e5e7eb',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+        marginBottom: '40px'
+      }}>
+        <h3 style={{
+          margin: '0 0 20px 0',
+          fontSize: '20px',
+          fontWeight: '600',
+          color: '#1f2937'
+        }}>
+          📈 Latest Events (ts, action, client)
+        </h3>
+
+        <DetailedActivityFeed
+          refreshInterval={state.autoRefresh ? 30 : 0}
+        />
       </div>
     </div>
   )

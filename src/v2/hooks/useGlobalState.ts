@@ -10,7 +10,7 @@ export interface GlobalState {
 
 const defaultState: GlobalState = {
   broker: 'local',
-  autoRefresh: true,
+  autoRefresh: false, // Changed to false by default
   refreshInterval: 30,
   sidebarOpen: true,
   lastUpdated: null

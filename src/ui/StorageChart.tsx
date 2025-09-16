@@ -29,6 +29,8 @@ const TIME_RANGES: TimeRange[] = [
   { label: 'Last 30m', minutes: 30 },
   { label: 'Last 1h', minutes: 60 },
   { label: 'Last 3h', minutes: 180 },
+  { label: 'Last 6h', minutes: 360 },
+  { label: 'Last 24h', minutes: 1440 },
 ]
 
 const STORAGE_SERIES_CONFIG = [
@@ -48,7 +50,7 @@ const STORAGE_SERIES_CONFIG = [
     key: 'messages_dropped_per_sec',
     name: 'Dropped Messages/sec',
     color: '#ef4444',
-    visible: true
+    visible: false
   }
 ]
 
@@ -56,7 +58,6 @@ export default function StorageChart({ broker, refreshInterval = 30, autoRefresh
   const [storageData, setStorageData] = useState<ChartDataPoint[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [useMockData, setUseMockData] = useState(false)
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>(TIME_RANGES[1]) // Default to 15m
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null)
   const intervalRef = useRef<number | null>(null)
@@ -159,13 +160,6 @@ export default function StorageChart({ broker, refreshInterval = 30, autoRefresh
       setLoading(true)
       setError(null)
       
-      if (useMockData) {
-        console.log('Using mock storage data mode')
-        setStorageData(generateMockStorageData())
-        setLastFetchTime(new Date())
-        return
-      }
-      
       // Calculate time range for API call
       const now = Math.floor(Date.now() / 1000)
       const from = now - (selectedTimeRange.minutes * 60)
@@ -201,7 +195,7 @@ export default function StorageChart({ broker, refreshInterval = 30, autoRefresh
     } finally {
       setLoading(false)
     }
-  }, [broker, useMockData, selectedTimeRange])
+  }, [broker, selectedTimeRange])
 
   // Manual refresh only - no auto-refresh to avoid excessive API calls
   useEffect(() => {
@@ -232,6 +226,29 @@ export default function StorageChart({ broker, refreshInterval = 30, autoRefresh
     }))
   }
 
+  const formatBytes = (value: number): string => {
+    if (value >= 1024 * 1024 * 1024) return `${(value / (1024 * 1024 * 1024)).toFixed(1)}GB`
+    if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)}MB`
+    if (value >= 1024) return `${(value / 1024).toFixed(1)}KB`
+    return `${value.toFixed(0)}B`
+  }
+
+  const formatNumber = (value: number): string => {
+    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`
+    if (value >= 1000) return `${(value / 1000).toFixed(1)}K`
+    return value.toFixed(0)
+  }
+
+  const customTickFormatter = (value: number): string => {
+    // Check if storage bytes series is visible
+    const hasBytesSeries = visibleSeries['store_messages_bytes']
+    
+    if (hasBytesSeries && value >= 1024) {
+      return formatBytes(value)
+    }
+    return formatNumber(value)
+  }
+
   const customTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -253,7 +270,14 @@ export default function StorageChart({ broker, refreshInterval = 30, autoRefresh
   }
 
   return (
-    <div className={`chart-section ${className || ''}`}>
+    <div style={{
+      background: 'white',
+      borderRadius: '12px',
+      border: '1px solid #e5e7eb',
+      padding: '20px',
+      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+      minHeight: '500px'
+    }}>
       <div className="chart-header">
         <h2 className="chart-title">Storage Metrics</h2>
         <div className="chart-controls">
@@ -276,15 +300,6 @@ export default function StorageChart({ broker, refreshInterval = 30, autoRefresh
             {loading ? 'Loading...' : 'Fetch Data'}
           </button>
           
-          <label className="mock-data-toggle">
-            <input
-              type="checkbox"
-              checked={useMockData}
-              onChange={(e) => setUseMockData(e.target.checked)}
-            />
-            Use Mock Data
-          </label>
-          
           <div className="series-toggles">
             {STORAGE_SERIES_CONFIG.map(series => (
               <label key={series.key} className="series-toggle">
@@ -304,42 +319,39 @@ export default function StorageChart({ broker, refreshInterval = 30, autoRefresh
         </div>
       </div>
 
-      {lastFetchTime && (
-        <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>
-          Last fetched: {lastFetchTime.toLocaleString()} • 
-          Range: {selectedTimeRange.label} • 
-          Data points: {storageData.length}
-        </div>
-      )}
-
       {error && (
         <div className="error-message">
           Error: {error}
         </div>
       )}
 
-      <div className="chart-container">
+      <div className="chart-container" style={{ marginTop: '20px' }}>
         {storageData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={380}>
-            <LineChart data={storageData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
-              <CartesianGrid strokeDasharray="3 3" />
+          <ResponsiveContainer width="100%" height={450}>
+            <LineChart data={storageData} margin={{ top: 10, right: 20, left: 60, bottom: 60 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis 
                 dataKey="time"
-                tick={{ fontSize: 10 }}
-                interval={Math.max(0, Math.floor(storageData.length / 4))}
+                tick={{ fontSize: 11 }}
+                interval={Math.max(0, Math.floor(storageData.length / 6))}
                 angle={-45}
                 textAnchor="end"
-                height={50}
+                height={55}
+                axisLine={{ stroke: '#d1d5db' }}
+                tickLine={{ stroke: '#d1d5db' }}
+                label={{ value: 'Time', position: 'insideBottom', offset: -10 }}
               />
               <YAxis 
-                tick={{ fontSize: 10 }}
-                label={{ value: 'Count/Bytes', angle: -90, position: 'insideLeft' }}
-                domain={['dataMin - 5', 'dataMax + 5']}
+                tick={{ fontSize: 11 }}
+                tickFormatter={customTickFormatter}
+                domain={['dataMin - 5%', 'dataMax + 5%']}
                 allowDataOverflow={false}
-                width={60}
+                width={55}
+                axisLine={{ stroke: '#d1d5db' }}
+                tickLine={{ stroke: '#d1d5db' }}
+                label={{ value: 'Count/Bytes', angle: -90, position: 'insideLeft' }}
               />
               <Tooltip content={customTooltip} />
-              <Legend />
               
               {STORAGE_SERIES_CONFIG.map(series => (
                 visibleSeries[series.key] && (
@@ -347,11 +359,11 @@ export default function StorageChart({ broker, refreshInterval = 30, autoRefresh
                     key={series.key}
                     type="monotone"
                     dataKey={series.key}
-                    name={series.name}
                     stroke={series.color}
                     strokeWidth={2}
                     dot={false}
-                    activeDot={{ r: 4 }}
+                    activeDot={{ r: 4, stroke: series.color, strokeWidth: 2 }}
+                    connectNulls={false}
                   />
                 )
               ))}
