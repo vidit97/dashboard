@@ -98,6 +98,29 @@ const AppContent = () => {
     setSelectedBroker('')
   }
 
+  // ===== LEGACY ROUTES BYPASS =====
+  // Allow direct access to legacy pages without login/broker selection
+  // Routes: /api-tables, /gre, /topics, /topic-management, /acl
+  const isLegacyRoute = location.pathname.match(/^\/(api-tables|gre|topics|topic-management|acl)$/)
+
+  if (isLegacyRoute) {
+    // Direct access to legacy pages without login/broker selection
+    return (
+      <div className="app-container">
+        <div className="main-content">
+          <Routes>
+            <Route path="/api-tables" element={<ApiTablesPage />} />
+            <Route path="/gre" element={<GreDashboard />} />
+            <Route path="/topics" element={<ClientTopicPage />} />
+            <Route path="/topic-management" element={<TopicManagement />} />
+            <Route path="/acl" element={<ACLPage />} />
+          </Routes>
+        </div>
+      </div>
+    )
+  }
+  // ===================================
+
   // Show login page if not logged in (unless bypassed)
   if (!isLoggedIn && !BYPASS_LOGIN) {
     return <LoginPage onLogin={handleLogin} />

@@ -11,6 +11,7 @@ import { V2ACLPage } from './pages/V2ACLPage'
 import { V2AlertsPage } from './pages/V2AlertsPage'
 import { V2SettingsPage } from './pages/V2SettingsPage'
 import { V2DiagnosticsPage } from './pages/V2DiagnosticsPage'
+import { V2ReportsPage } from './pages/V2ReportsPage'
 
 export const V2App: React.FC = () => {
   return (
@@ -23,6 +24,7 @@ export const V2App: React.FC = () => {
         <Route path="/events" element={<V2EventsPage />} />
         <Route path="/sessions" element={<V2SessionsPage />} />
         <Route path="/clients" element={<V2ClientsPage />} />
+        <Route path="/reports" element={<V2ReportsPage />} />
         <Route path="/alerts" element={<V2AlertsPage />} />
         <Route path="/acl" element={<V2ACLPage />} />
         <Route path="/settings" element={<V2SettingsPage />} />

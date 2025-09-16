@@ -326,7 +326,7 @@ export const V2OverviewPage: React.FC = () => {
           border: '1px solid #e5e7eb',
           padding: '20px',
           boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-          minHeight: '450px',
+          minHeight: '650px',
           marginBottom: '24px'
         }}>
           <TrafficConnectionsChart

@@ -16,6 +16,7 @@ const PAGES = [
   { id: 'events', label: 'Events', icon: '📋' },
   { id: 'sessions', label: 'Sessions', icon: '🔗' },
   { id: 'clients', label: 'Clients', icon: '💻' },
+  { id: 'reports', label: 'Reports', icon: '📊' },
   { id: 'alerts', label: 'Alerts', icon: '⚠️' },
   { id: 'acl', label: 'ACL', icon: '🔐' },
   { id: 'settings', label: 'Settings', icon: '⚙️' },

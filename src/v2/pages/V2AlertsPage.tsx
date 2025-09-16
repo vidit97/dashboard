@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useGlobalState } from '../hooks/useGlobalState'
 
 interface Alert {
   id: number
@@ -9,12 +10,8 @@ interface Alert {
   status: 'active' | 'acknowledged' | 'resolved'
 }
 
-interface V2AlertsPageProps {
-  globalState: any
-  updateState: (updates: any) => void
-}
-
-export const V2AlertsPage: React.FC<V2AlertsPageProps> = ({ globalState, updateState }) => {
+export const V2AlertsPage: React.FC = () => {
+  const { state, updateState } = useGlobalState()
   const [severityFilter, setSeverityFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('active')
 
@@ -93,7 +90,7 @@ export const V2AlertsPage: React.FC<V2AlertsPageProps> = ({ globalState, updateS
           color: '#6b7280',
           margin: 0
         }}>
-          Active problems and system health monitoring for {globalState.broker || 'Local'} broker
+          Active problems and system health monitoring for {state.broker || 'Local'} broker
         </p>
       </div>
 

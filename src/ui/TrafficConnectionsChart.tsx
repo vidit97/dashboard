@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { LineChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { watchMQTTService } from '../services/api'
 import { TrafficData, ConnectionsData, API_CONFIG } from '../config/api'
 
@@ -462,87 +462,125 @@ export default function TrafficConnectionsChart({ broker, refreshInterval = 30, 
       )}
 
       {/* Chart */}
-      <div style={{ height: '400px', width: '100%' }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart
-            data={chartData}
-            margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-            <XAxis 
-              dataKey="time" 
-              stroke="#6b7280"
-              fontSize={12}
-              angle={-45}
-              textAnchor="end"
-              height={60}
-            />
-            
-            {/* Left Y-axis for connections */}
-            <YAxis
-              yAxisId="connections"
-              stroke="#6b7280"
-              fontSize={12}
-              label={{ value: 'Client Connections', angle: -90, position: 'insideLeft' }}
-            />
-            
-            {/* Right Y-axis for traffic */}
-            <YAxis
-              yAxisId="traffic"
-              orientation="right"
-              stroke="#6b7280"
-              fontSize={12}
-              label={{ value: 'Messages/sec', angle: 90, position: 'insideRight' }}
-            />
-            
-            <Tooltip content={<CustomTooltip />} />
-            <Legend />
+      <div style={{ height: '600px', width: '100%' }}>
+        {/* Traffic Chart - Top */}
+        <div style={{ height: '45%', width: '100%', marginBottom: '20px' }}>
+          <h4 style={{ 
+            margin: '0 0 10px 0', 
+            fontSize: '14px', 
+            fontWeight: '600', 
+            color: '#374151',
+            textAlign: 'center'
+          }}>
+            Message Traffic (per second)
+          </h4>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={chartData}
+              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+              <XAxis 
+                dataKey="time" 
+                stroke="#6b7280"
+                fontSize={10}
+                angle={-45}
+                textAnchor="end"
+                height={40}
+                hide={true}
+              />
+              <YAxis
+                stroke="#6b7280"
+                fontSize={12}
+                label={{ value: 'Messages/sec', angle: -90, position: 'insideLeft' }}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              
+              {/* Lines for traffic */}
+              {visibleTrafficSeries.messages_sent_per_sec_1m && (
+                <Line
+                  type="monotone"
+                  dataKey="messages_sent_per_sec_1m"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Messages Sent/sec"
+                />
+              )}
+              {visibleTrafficSeries.messages_received_per_sec_1m && (
+                <Line
+                  type="monotone"
+                  dataKey="messages_received_per_sec_1m"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Messages Received/sec"
+                />
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
 
-            {/* Stacked bars for connections */}
-            {visibleConnectionSeries.clients_connected && (
-              <Bar
-                yAxisId="connections"
-                dataKey="clients_connected"
-                stackId="connections"
-                fill="#10b981"
-                name="Connected Clients"
-              />
-            )}
-            {visibleConnectionSeries.clients_disconnected && (
-              <Bar
-                yAxisId="connections"
-                dataKey="clients_disconnected"
-                stackId="connections"
-                fill="#ef4444"
-                name="Disconnected Clients"
-              />
-            )}
+        {/* Separator */}
+        <div style={{ 
+          height: '1px', 
+          background: '#e5e7eb', 
+          margin: '10px 0',
+          width: '100%'
+        }} />
 
-            {/* Lines for traffic */}
-            {visibleTrafficSeries.messages_sent_per_sec_1m && (
-              <Line
-                yAxisId="traffic"
-                type="monotone"
-                dataKey="messages_sent_per_sec_1m"
-                stroke="#3b82f6"
-                strokeWidth={2}
-                dot={false}
-                name="Messages Sent/sec"
+        {/* Connections Chart - Bottom */}
+        <div style={{ height: '45%', width: '100%', marginTop: '20px' }}>
+          <h4 style={{ 
+            margin: '0 0 10px 0', 
+            fontSize: '14px', 
+            fontWeight: '600', 
+            color: '#374151',
+            textAlign: 'center'
+          }}>
+            Client Connections
+          </h4>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={chartData}
+              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+              <XAxis 
+                dataKey="time" 
+                stroke="#6b7280"
+                fontSize={10}
+                angle={-45}
+                textAnchor="end"
+                height={40}
               />
-            )}
-            {visibleTrafficSeries.messages_received_per_sec_1m && (
-              <Line
-                yAxisId="traffic"
-                type="monotone"
-                dataKey="messages_received_per_sec_1m"
-                stroke="#10b981"
-                strokeWidth={2}
-                dot={false}
-                name="Messages Received/sec"
+              <YAxis
+                stroke="#6b7280"
+                fontSize={12}
+                label={{ value: 'Client Count', angle: -90, position: 'insideLeft' }}
               />
-            )}
-          </ComposedChart>
-        </ResponsiveContainer>
+              <Tooltip content={<CustomTooltip />} />
+              
+              {/* Stacked bars for connections */}
+              {visibleConnectionSeries.clients_connected && (
+                <Bar
+                  dataKey="clients_connected"
+                  stackId="connections"
+                  fill="#10b981"
+                  name="Connected Clients"
+                />
+              )}
+              {visibleConnectionSeries.clients_disconnected && (
+                <Bar
+                  dataKey="clients_disconnected"
+                  stackId="connections"
+                  fill="#ef4444"
+                  name="Disconnected Clients"
+                />
+              )}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       {/* Data Summary */}
