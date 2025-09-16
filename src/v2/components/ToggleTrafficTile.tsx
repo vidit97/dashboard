@@ -45,7 +45,7 @@ const formatValue = (value: number, type: 'messages' | 'bytes'): string => {
 // Helper function to get last 5 data points from timeseries
 const getLastFivePoints = (series: TimeseriesSeries[]): { [key: string]: number[] } => {
   const result: { [key: string]: number[] } = {}
-  
+
   series.forEach(s => {
     const points = s.points
     if (points.length >= 5) {
@@ -60,7 +60,7 @@ const getLastFivePoints = (series: TimeseriesSeries[]): { [key: string]: number[
       result[s.name] = points.map(p => p[1])
     }
   })
-  
+
   return result
 }
 
@@ -176,11 +176,21 @@ export const ToggleTrafficTile: React.FC<ToggleTrafficTileProps> = ({ broker }) 
       borderRadius: '12px',
       border: '1px solid #e5e7eb',
       boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-      minHeight: '100px'
+      minHeight: '100px',
+      display: 'grid',
+      gridTemplateColumns: '2.5fr 7.5fr',
+      gap: '20px',
+      alignItems: 'stretch'
     }}>
-      {/* Header with title, info icon, and compact toggle */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', position: 'relative' }}>
+      {/* Left section: Metrics and Toggle (30% width) */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        minHeight: '120px'
+      }}>
+        {/* Title with info icon */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', position: 'relative', marginBottom: '12px' }}>
           <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>{activeData.title}</span>
           <div
             style={{
@@ -231,16 +241,26 @@ export const ToggleTrafficTile: React.FC<ToggleTrafficTileProps> = ({ broker }) 
             )}
           </div>
         </div>
+
+        {/* Value */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+          <div style={{ fontSize: '28px', fontWeight: '700', color: '#111827' }}>
+            {formatValue(activeData.value, activeMode)}
+          </div>
+        </div>
+
+        {/* Toggle buttons */}
         <div style={{
           display: 'flex',
           background: '#f3f4f6',
           borderRadius: '4px',
-          padding: '1px'
+          padding: '1px',
+          width: 'fit-content'
         }}>
           <button
             onClick={() => setActiveMode('messages')}
             style={{
-              padding: '3px 8px',
+              padding: '4px 10px',
               fontSize: '11px',
               fontWeight: '500',
               border: 'none',
@@ -248,7 +268,8 @@ export const ToggleTrafficTile: React.FC<ToggleTrafficTileProps> = ({ broker }) 
               cursor: 'pointer',
               background: activeMode === 'messages' ? '#3b82f6' : 'transparent',
               color: activeMode === 'messages' ? 'white' : '#6b7280',
-              transition: 'all 0.2s ease'
+              transition: 'all 0.2s ease',
+              minWidth: '32px'
             }}
           >
             Pub
@@ -256,7 +277,7 @@ export const ToggleTrafficTile: React.FC<ToggleTrafficTileProps> = ({ broker }) 
           <button
             onClick={() => setActiveMode('bytes')}
             style={{
-              padding: '3px 8px',
+              padding: '4px 10px',
               fontSize: '11px',
               fontWeight: '500',
               border: 'none',
@@ -264,7 +285,8 @@ export const ToggleTrafficTile: React.FC<ToggleTrafficTileProps> = ({ broker }) 
               cursor: 'pointer',
               background: activeMode === 'bytes' ? '#f59e0b' : 'transparent',
               color: activeMode === 'bytes' ? 'white' : '#6b7280',
-              transition: 'all 0.2s ease'
+              transition: 'all 0.2s ease',
+              minWidth: '32px'
             }}
           >
             Out
@@ -272,17 +294,15 @@ export const ToggleTrafficTile: React.FC<ToggleTrafficTileProps> = ({ broker }) 
         </div>
       </div>
 
-      {/* Value */}
-      <div style={{ marginBottom: '20px' }}>
-        <div style={{ fontSize: '28px', fontWeight: '700', color: '#111827' }}>
-          {formatValue(activeData.value, activeMode)}
-        </div>
-      </div>
-
-      {/* Larger trend sparkline */}
-      {activeData.trendData.length > 1 && (
-        <div style={{ width: '100%', height: '100px' }}>
-          <svg width="100%" height="100" viewBox="0 0 300 100" preserveAspectRatio="xMidYMid meet">
+      {/* Right section: Graph (75% width) */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        minHeight: '120px'
+      }}>
+        {activeData.trendData.length > 1 ? (
+          <svg width="100%" height="120" viewBox="0 0 300 120" preserveAspectRatio="xMidYMid meet">
             <defs>
               <linearGradient id={`gradient-${activeMode}`} x1="0%" y1="0%" x2="0%" y2="100%">
                 <stop offset="0%" stopColor={activeData.color} stopOpacity="0.6"/>
@@ -290,7 +310,7 @@ export const ToggleTrafficTile: React.FC<ToggleTrafficTileProps> = ({ broker }) 
               </linearGradient>
             </defs>
             <path
-              d={createSparklinePath(activeData.trendData, 300, 100)}
+              d={createSparklinePath(activeData.trendData, 300, 120)}
               fill="none"
               stroke={activeData.color}
               strokeWidth="4"
@@ -298,7 +318,7 @@ export const ToggleTrafficTile: React.FC<ToggleTrafficTileProps> = ({ broker }) 
               strokeLinejoin="round"
             />
             <path
-              d={createSparklinePath(activeData.trendData, 300, 100) + ` L 295 90 L 5 90 Z`}
+              d={createSparklinePath(activeData.trendData, 300, 120) + ` L 295 110 L 5 110 Z`}
               fill={`url(#gradient-${activeMode})`}
               opacity="0.3"
             />
@@ -307,7 +327,7 @@ export const ToggleTrafficTile: React.FC<ToggleTrafficTileProps> = ({ broker }) 
               const maxValue = Math.max(...activeData.trendData)
               const minValue = Math.min(...activeData.trendData)
               const range = maxValue - minValue || 1
-              const y = 90 - ((value - minValue) / range) * 80
+              const y = 110 - ((value - minValue) / range) * 100
               return (
                 <circle
                   key={index}
@@ -319,8 +339,12 @@ export const ToggleTrafficTile: React.FC<ToggleTrafficTileProps> = ({ broker }) 
               )
             })}
           </svg>
-        </div>
-      )}
+        ) : (
+          <div style={{ color: '#9ca3af', fontSize: '14px' }}>
+            No data available
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -13,6 +13,7 @@ export const API_CONFIG = {
     CONNECTIONS: '/api/v1/timeseries/connections',
     STORAGE: '/api/v1/timeseries/storage',
     ROLLUPS_24H: '/api/v1/rollups/24h',
+    CONTAINERS: '/api/v1/containers/mosquitto',
   }
 } as const
 
@@ -77,4 +78,26 @@ export interface Rollups24hData {
   avg_connections_24h: number
   peak_connections_24h: number
   at: number
+}
+
+export interface ContainerData {
+  broker: string
+  container_id_regex: string
+  cpu: {
+    use_rate: number
+    max_cores: number
+    quota_cores: number | null
+  }
+  memory: {
+    use_bytes: number
+    max_bytes: number
+  }
+  disk: {
+    store_bytes: number
+  }
+  lifecycle: {
+    start_time: number
+    last_seen: number
+    uptime_seconds: number
+  }
 }
