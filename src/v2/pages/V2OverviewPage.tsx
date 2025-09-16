@@ -235,7 +235,7 @@ export const V2OverviewPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Charts Section - FIXED: Single containers without nested divs */}
+      {/* Charts Section */}
       <div style={{ marginBottom: '40px', width: '100%' }}>
         {/* Charts Row - Two Charts Side by Side */}
         <div style={{
@@ -245,14 +245,13 @@ export const V2OverviewPage: React.FC = () => {
           marginBottom: '24px',
           width: '100%'
         }}>
-          {/* Traffic Chart Container - SINGLE BOX */}
+          {/* Traffic Chart Container */}
           <div style={{
             background: 'white',
             borderRadius: '12px',
             border: '1px solid #e5e7eb',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-            padding: '24px',
-            minHeight: '500px'
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+            padding: '24px'
           }}>
             <TrafficChart
               broker={state.broker}
@@ -262,14 +261,13 @@ export const V2OverviewPage: React.FC = () => {
             />
           </div>
           
-          {/* Connections Chart Container - SINGLE BOX */}
+          {/* Connections Chart Container */}
           <div style={{
             background: 'white',
             borderRadius: '12px',
             border: '1px solid #e5e7eb',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-            padding: '24px',
-            minHeight: '500px'
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+            padding: '24px'
           }}>
             <ConnectionsChart
               broker={state.broker}
@@ -280,18 +278,20 @@ export const V2OverviewPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Storage Chart Row - SINGLE BOX */}
+        {/* Storage Chart Row */}
         <div style={{
-          width: '100%',
-          maxWidth: '50%'
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 500px), 1fr))',
+          gap: '24px',
+          width: '100%'
         }}>
+          {/* Storage Chart Container */}
           <div style={{
             background: 'white',
             borderRadius: '12px',
             border: '1px solid #e5e7eb',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-            padding: '24px',
-            minHeight: '500px'
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+            padding: '24px'
           }}>
             <StorageChart
               broker={state.broker}
@@ -300,6 +300,11 @@ export const V2OverviewPage: React.FC = () => {
               className=""
             />
           </div>
+
+          {/* Invisible placeholder box for grid consistency */}
+          <div style={{
+            visibility: 'hidden'
+          }} />
         </div>
       </div>
 

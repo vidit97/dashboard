@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { watchMQTTService } from '../services/api'
 import { TrafficData, API_CONFIG } from '../config/api'
+import { calculateOptimalStep } from '../utils/prometheusStep'
+import { CHART_MARGINS, CHART_HEIGHTS, AXIS_STYLES, AXIS_DIMENSIONS, AXIS_LABELS, AXIS_DOMAIN, formatTimestamp, CHART_STYLES } from '../config/chartConfig'
 
 interface TrafficChartProps {
   broker: string
@@ -75,14 +77,6 @@ export default function TrafficChart({ broker, refreshInterval = 30, autoRefresh
     }, {} as Record<string, boolean>)
   )
 
-  const formatTimestamp = (timestamp: number): string => {
-    return new Date(timestamp * 1000).toLocaleTimeString('en-US', {
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    })
-  }
 
   const transformTrafficData = (data: TrafficData): ChartDataPoint[] => {
     if (!data.series || data.series.length === 0) {
@@ -143,14 +137,15 @@ export default function TrafficChart({ broker, refreshInterval = 30, autoRefresh
       setLoading(true)
       setError(null)
       
-      // Calculate time range for API call
+      // Calculate time range and optimal step for API call
       const now = Math.floor(Date.now() / 1000)
       const from = now - (selectedTimeRange.minutes * 60)
       const to = now
+      const step = calculateOptimalStep(selectedTimeRange.minutes)
       
-      console.log(`Fetching traffic data for broker: ${broker}, from: ${from}, to: ${to} (${selectedTimeRange.label})`)
+      console.log(`Fetching traffic data for broker: ${broker}, from: ${from}, to: ${to}, step: ${step}s (${selectedTimeRange.label})`)
       
-      const data = await watchMQTTService.getTraffic(broker, from, to)
+      const data = await watchMQTTService.getTraffic(broker, from, to, step)
       console.log('Raw traffic API response:', data)
       
       const transformedData = transformTrafficData(data)
@@ -214,13 +209,18 @@ export default function TrafficChart({ broker, refreshInterval = 30, autoRefresh
     if (value >= 1024 * 1024 * 1024) return `${(value / (1024 * 1024 * 1024)).toFixed(1)}GB`
     if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)}MB`
     if (value >= 1024) return `${(value / 1024).toFixed(1)}KB`
-    return `${value.toFixed(0)}B`
+    if (value >= 1) return `${value.toFixed(1)}B`
+    if (value > 0) return `${value.toFixed(2)}B`
+    return '0B'
   }
 
   const formatNumber = (value: number): string => {
     if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`
     if (value >= 1000) return `${(value / 1000).toFixed(1)}K`
-    return value.toFixed(0)
+    if (value >= 1) return value.toFixed(1)
+    if (value >= 0.1) return value.toFixed(2)
+    if (value > 0) return value.toFixed(3)
+    return '0'
   }
 
   const customTickFormatter = (value: number): string => {
@@ -230,22 +230,23 @@ export default function TrafficChart({ broker, refreshInterval = 30, autoRefresh
     if (hasBytesSeries && value >= 1024) {
       return formatBytes(value)
     }
-    return formatNumber(value)
+    
+    // For small values, show more precision
+    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`
+    if (value >= 1000) return `${(value / 1000).toFixed(1)}K`
+    if (value >= 1) return value.toFixed(1)
+    if (value >= 0.1) return value.toFixed(2)
+    if (value > 0) return value.toFixed(3)
+    return '0'
   }
 
   const customTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div style={{
-          backgroundColor: 'white',
-          padding: '10px',
-          border: '1px solid #e5e7eb',
-          borderRadius: '6px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-        }}>
-          <p style={{ margin: '0 0 8px 0', fontWeight: '600' }}>{`Time: ${label}`}</p>
+        <div style={CHART_STYLES.tooltip}>
+          <p style={CHART_STYLES.tooltipLabel}>{`Time: ${label}`}</p>
           {payload.map((entry: any, index: number) => (
-            <p key={index} style={{ color: entry.color, margin: '4px 0' }}>
+            <p key={index} style={{ color: entry.color, ...CHART_STYLES.tooltipValue }}>
               {`${entry.name}: ${entry.value.toFixed(2)}`}
             </p>
           ))}
@@ -313,18 +314,22 @@ export default function TrafficChart({ broker, refreshInterval = 30, autoRefresh
               borderRadius: '6px',
               border: '1px solid #d1d5db',
               fontSize: '14px',
-              backgroundColor: loading ? '#f3f4f6' : 'white',
+              backgroundColor: loading ? '#f9fafb' : '#ffffff',
+              color: loading ? '#6b7280' : '#374151',
               cursor: loading ? 'not-allowed' : 'pointer',
-              transition: 'background-color 0.2s'
+              transition: 'all 0.2s',
+              fontWeight: '500'
             }}
             onMouseEnter={(e) => {
               if (!loading) {
-                e.currentTarget.style.backgroundColor = '#f9fafb'
+                e.currentTarget.style.backgroundColor = '#f3f4f6'
+                e.currentTarget.style.borderColor = '#9ca3af'
               }
             }}
             onMouseLeave={(e) => {
               if (!loading) {
-                e.currentTarget.style.backgroundColor = 'white'
+                e.currentTarget.style.backgroundColor = '#ffffff'
+                e.currentTarget.style.borderColor = '#d1d5db'
               }
             }}
           >
@@ -386,39 +391,13 @@ export default function TrafficChart({ broker, refreshInterval = 30, autoRefresh
       )}
 
       {/* Chart */}
-      <div style={{ width: '100%', height: '400px' }}>
+      <div style={{ width: '100%', height: '300px' }}>
         {trafficData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart 
-              data={trafficData} 
-              margin={{ top: 10, right: 30, left: 60, bottom: 80 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis 
-                dataKey="time"
-                tick={{ fontSize: 11 }}
-                interval={Math.max(0, Math.floor(trafficData.length / 8))}
-                angle={-45}
-                textAnchor="end"
-                height={60}
-                axisLine={{ stroke: '#d1d5db' }}
-                tickLine={{ stroke: '#d1d5db' }}
-              />
-              <YAxis 
-                tick={{ fontSize: 11 }}
-                tickFormatter={customTickFormatter}
-                domain={['dataMin - 5%', 'dataMax + 5%']}
-                allowDataOverflow={false}
-                width={60}
-                axisLine={{ stroke: '#d1d5db' }}
-                tickLine={{ stroke: '#d1d5db' }}
-                label={{ 
-                  value: 'Rate per second', 
-                  angle: -90, 
-                  position: 'insideLeft',
-                  style: { fontSize: 12, fill: '#6b7280' }
-                }}
-              />
+            <LineChart data={trafficData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="time" />
+              <YAxis tickFormatter={customTickFormatter} />
               <Tooltip content={customTooltip} />
               
               {TRAFFIC_SERIES_CONFIG.map(series => (
@@ -429,9 +408,8 @@ export default function TrafficChart({ broker, refreshInterval = 30, autoRefresh
                     dataKey={series.key}
                     stroke={series.color}
                     strokeWidth={2}
+                    name={series.name}
                     dot={false}
-                    activeDot={{ r: 4, stroke: series.color, strokeWidth: 2 }}
-                    connectNulls={false}
                   />
                 )
               ))}

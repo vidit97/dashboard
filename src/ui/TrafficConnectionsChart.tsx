@@ -2,6 +2,16 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { LineChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { watchMQTTService } from '../services/api'
 import { TrafficData, ConnectionsData, API_CONFIG } from '../config/api'
+import { calculateOptimalStep } from '../utils/prometheusStep'
+
+// Simple timestamp formatter
+const formatTimestamp = (timestamp: number): string => {
+  return new Date(timestamp * 1000).toLocaleTimeString('en-US', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
 
 interface TrafficConnectionsChartProps {
   broker: string
@@ -89,14 +99,6 @@ export default function TrafficConnectionsChart({ broker, refreshInterval = 30, 
     }, {} as Record<string, boolean>)
   )
 
-  const formatTimestamp = (timestamp: number): string => {
-    return new Date(timestamp * 1000).toLocaleTimeString('en-US', {
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    })
-  }
 
   const combineData = (trafficData: TrafficData, connectionsData: ConnectionsData): ChartDataPoint[] => {
     if (!trafficData.series || !connectionsData.series || 
@@ -219,13 +221,14 @@ export default function TrafficConnectionsChart({ broker, refreshInterval = 30, 
       const now = Math.floor(Date.now() / 1000)
       const from = now - (selectedTimeRange.minutes * 60)
       const to = now
+      const step = calculateOptimalStep(selectedTimeRange.minutes)
 
-      console.log(`Combined chart: Fetching data for broker ${broker} from ${from} to ${to}`)
+      console.log(`Combined chart: Fetching data for broker ${broker} from ${from} to ${to}, step: ${step}s`)
       
-      // Fetch both traffic and connections data in parallel
+      // Fetch both traffic and connections data in parallel with optimal step
       const [trafficData, connectionsData] = await Promise.all([
-        watchMQTTService.getTraffic(broker, from, to),
-        watchMQTTService.getConnections(broker, from, to)
+        watchMQTTService.getTraffic(broker, from, to, step),
+        watchMQTTService.getConnections(broker, from, to, step)
       ])
       
       console.log('Combined chart: Traffic data received:', trafficData)
@@ -313,7 +316,7 @@ export default function TrafficConnectionsChart({ broker, refreshInterval = 30, 
   }
 
   return (
-    <div className={className} style={{ width: '100%', minHeight: '400px' }}>
+    <div className={className} style={{ width: '100%' }}>
       {/* Header */}
       <div style={{ 
         display: 'flex', 
@@ -462,7 +465,7 @@ export default function TrafficConnectionsChart({ broker, refreshInterval = 30, 
       )}
 
       {/* Chart */}
-      <div style={{ height: '600px', width: '100%' }}>
+      <div style={{ height: '450px', width: '100%' }}>
         {/* Traffic Chart - Top */}
         <div style={{ height: '45%', width: '100%', marginBottom: '20px' }}>
           <h4 style={{ 
@@ -475,25 +478,10 @@ export default function TrafficConnectionsChart({ broker, refreshInterval = 30, 
             Message Traffic (per second)
           </h4>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={chartData}
-              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-              <XAxis 
-                dataKey="time" 
-                stroke="#6b7280"
-                fontSize={10}
-                angle={-45}
-                textAnchor="end"
-                height={40}
-                hide={true}
-              />
-              <YAxis
-                stroke="#6b7280"
-                fontSize={12}
-                label={{ value: 'Messages/sec', angle: -90, position: 'insideLeft' }}
-              />
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="time" hide={true} />
+              <YAxis />
               <Tooltip content={<CustomTooltip />} />
               
               {/* Lines for traffic */}
@@ -541,24 +529,10 @@ export default function TrafficConnectionsChart({ broker, refreshInterval = 30, 
             Client Connections
           </h4>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={chartData}
-              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-              <XAxis 
-                dataKey="time" 
-                stroke="#6b7280"
-                fontSize={10}
-                angle={-45}
-                textAnchor="end"
-                height={40}
-              />
-              <YAxis
-                stroke="#6b7280"
-                fontSize={12}
-                label={{ value: 'Client Count', angle: -90, position: 'insideLeft' }}
-              />
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="time" />
+              <YAxis />
               <Tooltip content={<CustomTooltip />} />
               
               {/* Stacked bars for connections */}

@@ -489,23 +489,6 @@ export const DetailedActivityFeed: React.FC<DetailedActivityFeedProps> = ({
           >
             {loading ? 'Loading...' : '🔄 Refresh'}
           </button>
-          
-          {/* Clear Cache Button */}
-          <button 
-            onClick={() => setCache(new Map())}
-            title="Clear cache"
-            style={{
-              padding: '6px 8px',
-              fontSize: '11px',
-              background: '#f9fafb',
-              border: '1px solid #e5e7eb',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              color: '#6b7280'
-            }}
-          >
-            🗑️
-          </button>
         </div>
       </div>
       
