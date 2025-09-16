@@ -15,6 +15,7 @@ export interface Session {
   port: number | null;
   tls_version: string | null;
   tls_cipher: string | null;
+  og_client?: string | null;  // Original client name from the database
 }
 
 export interface Event {
@@ -358,3 +359,76 @@ export const API_CONFIGS: Record<string, ApiTableConfig> = {
   // Time-series Views (60-minute aggregates)
   // (removed server-side views have been deleted from the API and so are not exposed here)
 };
+
+// Client Alias Map Interface
+export interface ClientAliasMap {
+  og_client: string;
+  device_id: string;
+  label: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Extended interfaces for Reports
+export interface ReportData {
+  generalInfo: {
+    og_client: string;
+    username: string;
+    protocol: string;
+    version: string;
+    status: string;
+    lastConnect: string;
+    lastDisconnect: string;
+    cleanSession: string;
+    keepAlive: string;
+    totalSessions: number;
+    activeSessions: number;
+  };
+  sessions: SessionReportData[];
+  topicSubscriptions: SubscriptionReportData[];
+  publishedData: PublishedDataReport;
+  recentActivity: ActivityReportData[];
+}
+
+export interface SessionReportData {
+  session_id: number;
+  client: string;
+  start_ts: string;
+  end_ts: string | null;
+  status: 'Active' | 'Ended';
+  duration: string;
+  ip_address: string;
+  port: number;
+  protocol_version: string;
+  keepalive: number;
+  subscriptions_count: number;
+}
+
+export interface SubscriptionReportData {
+  client: string;
+  topic: string;
+  qos: number;
+  active: boolean;
+  created_at: string;
+  last_subscribe_ts: string;
+  last_unsubscribe_ts: string | null;
+}
+
+export interface PublishedDataReport {
+  og_client: string;
+  monitoringDuration: string;
+  packetsPublished: number;
+  subscribedPacketsDelivered: number;
+  packetsDropped: number;
+  bytesPublished: number;
+  bytesSubscribed: number;
+}
+
+export interface ActivityReportData {
+  id: number;
+  ts: string;
+  action: string;
+  client: string;
+  topic: string | null;
+  details: string;
+}

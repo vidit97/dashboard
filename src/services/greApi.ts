@@ -1419,6 +1419,278 @@ export class GreApiService {
     
     return null // Timeout reached
   }
+
+  // Get published data report from real sources
+  static async getPublishedDataReport(
+    ogClient: string,
+    startDate?: string,
+    endDate?: string
+  ): Promise<import('../types/api').PublishedDataReport> {
+    try {
+      // Build date filters for minute-level data
+      const dateFilters: string[] = [`og_client=eq.${ogClient}`]
+      if (startDate) {
+        dateFilters.push(`minute=gte.${startDate.split('T')[0]}`) // Extract date part
+      }
+      if (endDate) {
+        dateFilters.push(`minute=lte.${endDate.split('T')[0]}`) // Extract date part
+      }
+
+      // Aggregate published packets and bytes from pub_minute table
+      const pubFilters = [...dateFilters]
+      const pubUrl = `/pub_minute?${pubFilters.join('&')}&select=packets,bytes`
+      const pubResponse = await greApi.get<any[]>(pubUrl)
+      
+      // Aggregate subscribed packets and bytes from sub_minute table  
+      const subFilters = [...dateFilters]
+      const subUrl = `/sub_minute?${subFilters.join('&')}&select=packets,bytes`
+      const subResponse = await greApi.get<any[]>(subUrl)
+      
+      // Aggregate dropped packets from drop_minute table
+      const dropFilters = [...dateFilters]
+      const dropUrl = `/drop_minute?${dropFilters.join('&')}&select=packets`
+      const dropResponse = await greApi.get<any[]>(dropUrl)
+
+      // Calculate totals
+      const packetsPublished = pubResponse.data.reduce((sum, row) => sum + (row.packets || 0), 0)
+      const bytesPublished = pubResponse.data.reduce((sum, row) => sum + (row.bytes || 0), 0)
+      const subscribedPacketsDelivered = subResponse.data.reduce((sum, row) => sum + (row.packets || 0), 0)
+      const bytesSubscribed = subResponse.data.reduce((sum, row) => sum + (row.bytes || 0), 0)
+      const packetsDropped = dropResponse.data.reduce((sum, row) => sum + (row.packets || 0), 0)
+
+      return {
+        og_client: ogClient,
+        monitoringDuration: this.calculateDateRangeDuration(startDate, endDate),
+        packetsPublished,
+        subscribedPacketsDelivered, 
+        packetsDropped,
+        bytesPublished,
+        bytesSubscribed
+      }
+    } catch (error) {
+      console.error('Error fetching published data report:', error)
+      // Fallback to basic calculation
+      return {
+        og_client: ogClient,
+        monitoringDuration: this.calculateDateRangeDuration(startDate, endDate),
+        packetsPublished: 0,
+        subscribedPacketsDelivered: 0,
+        packetsDropped: 0,
+        bytesPublished: 0,
+        bytesSubscribed: 0
+      }
+    }
+  }
+
+  // Helper to calculate duration between dates
+  static calculateDateRangeDuration(startDate?: string, endDate?: string): string {
+    if (!startDate || !endDate) {
+      return 'N/A'
+    }
+    
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const diffMs = end.getTime() - start.getTime()
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+    
+    if (diffDays === 1) {
+      return '1 day'
+    } else if (diffDays < 7) {
+      return `${diffDays} days`
+    } else if (diffDays < 30) {
+      const weeks = Math.floor(diffDays / 7)
+      return `${weeks} week${weeks > 1 ? 's' : ''}`
+    } else {
+      const months = Math.floor(diffDays / 30)
+      return `${months} month${months > 1 ? 's' : ''}`
+    }
+  }
+
+  // Report Generation Functions
+  static async generateClientReport(
+    ogClient: string,
+    startDate?: string,
+    endDate?: string
+  ): Promise<import('../types/api').ReportData> {
+    try {
+      // Build session filters with proper date range handling
+      const sessionFilters: string[] = [`og_client=eq.${ogClient}`]
+      if (startDate) {
+        sessionFilters.push(`start_ts=gte.${startDate}`)
+      }
+      if (endDate) {
+        sessionFilters.push(`start_ts=lte.${endDate}`)
+      }
+
+      // 1. Get all sessions for this og_client (remove artificial limit)
+      const sessionsUrl = `/sessions?${sessionFilters.join('&')}&order=start_ts.desc`
+      const sessionsResponse = await greApi.get<import('../types/api').Session[]>(sessionsUrl)
+
+      // 2. Get client alias mapping
+      const aliasResponse = await greApi.get<import('../types/api').ClientAliasMap[]>(
+        `/client_alias_map?og_client=eq.${ogClient}`
+      )
+
+      // 3. Get all subscriptions for this og_client with date filtering
+      // Include subscriptions that were either subscribed OR unsubscribed in the date range
+      const subscriptionFilters: string[] = [`og_client=eq.${ogClient}`]
+      if (startDate && endDate) {
+        // Use OR logic to get subscriptions active during the period
+        subscriptionFilters.push(`or=(last_subscribe_ts.gte.${startDate},last_unsubscribe_ts.gte.${startDate})`)
+        subscriptionFilters.push(`or=(last_subscribe_ts.lte.${endDate},last_unsubscribe_ts.lte.${endDate})`)
+      } else if (startDate) {
+        subscriptionFilters.push(`or=(last_subscribe_ts.gte.${startDate},last_unsubscribe_ts.gte.${startDate})`)
+      } else if (endDate) {
+        subscriptionFilters.push(`or=(last_subscribe_ts.lte.${endDate},last_unsubscribe_ts.lte.${endDate})`)
+      }
+      const subscriptionsUrl = `/subscriptions?${subscriptionFilters.join('&')}`
+      const subscriptionsResponse = await greApi.get<import('../types/api').Subscription[]>(subscriptionsUrl)
+
+      // 4. Get recent activity events with date filtering (remove artificial limit)
+      const eventFilters: string[] = [`og_client=eq.${ogClient}`, 'order=ts.desc']
+      if (startDate) {
+        eventFilters.push(`ts=gte.${startDate}`)
+      }
+      if (endDate) {
+        eventFilters.push(`ts=lte.${endDate}`)
+      }
+      const eventsUrl = `/events?${eventFilters.join('&')}`
+      const eventsResponse = await greApi.get<import('../types/api').Event[]>(eventsUrl)
+
+      // Process the data
+      const sessions = sessionsResponse.data
+      const activeSessions = sessions.filter((s: any) => !s.end_ts)
+      const latestSession = sessions.length > 0 ? sessions[0] : null
+
+      // Calculate general info
+      const generalInfo = {
+        og_client: ogClient,
+        username: latestSession?.username || ogClient,
+        protocol: 'MQTT',
+        version: latestSession?.protocol_version || 'Unknown',
+        status: activeSessions.length > 0 ? 'Connected' : 'Disconnected',
+        lastConnect: latestSession?.start_ts || 'Never',
+        lastDisconnect: sessions.find((s: any) => s.end_ts)?.end_ts || 'Never',
+        cleanSession: latestSession?.clean_session ? 'Yes' : 'No',
+        keepAlive: latestSession?.keepalive?.toString() || 'Unknown',
+        totalSessions: sessions.length,
+        activeSessions: activeSessions.length
+      }
+
+      // Process sessions data
+      const sessionsData: import('../types/api').SessionReportData[] = sessions.map((session: any) => {
+        const subscriptionsForSession = subscriptionsResponse.data.filter(
+          (sub: any) => sub.session_id === session.id
+        )
+
+        return {
+          session_id: session.id,
+          client: session.client,
+          start_ts: session.start_ts,
+          end_ts: session.end_ts,
+          status: session.end_ts ? 'Ended' : 'Active',
+          duration: this.calculateSessionDuration(session.start_ts, session.end_ts),
+          ip_address: session.ip_address || 'Unknown',
+          port: session.port || 0,
+          protocol_version: session.protocol_version || 'Unknown',
+          keepalive: session.keepalive || 0,
+          subscriptions_count: subscriptionsForSession.length
+        }
+      })
+
+      // Process subscriptions data
+      const subscriptionsData: import('../types/api').SubscriptionReportData[] = subscriptionsResponse.data.map((sub: any) => ({
+        client: sub.client,
+        topic: sub.topic,
+        qos: sub.qos,
+        active: sub.active,
+        created_at: sub.created_at,
+        last_subscribe_ts: sub.last_subscribe_ts || sub.created_at,
+        last_unsubscribe_ts: sub.last_unsubscribe_ts || null
+      }))
+
+      // Calculate published data from real sources
+      const publishedData: import('../types/api').PublishedDataReport = await this.getPublishedDataReport(
+        ogClient, 
+        startDate, 
+        endDate
+      )
+
+      // Process activity data
+      const activityData: import('../types/api').ActivityReportData[] = eventsResponse.data.map(event => ({
+        id: event.id,
+        ts: event.ts,
+        action: event.action,
+        client: event.client || 'Unknown',
+        topic: event.topic,
+        details: this.formatEventDetails(event)
+      }))
+
+      return {
+        generalInfo,
+        sessions: sessionsData,
+        topicSubscriptions: subscriptionsData,
+        publishedData,
+        recentActivity: activityData
+      }
+    } catch (error) {
+      console.error('Error generating client report:', error)
+      throw new Error('Failed to generate client report')
+    }
+  }
+
+  private static calculateSessionDuration(startTs: string, endTs: string | null): string {
+    const start = new Date(startTs)
+    const end = endTs ? new Date(endTs) : new Date()
+    const durationMs = end.getTime() - start.getTime()
+    const hours = Math.floor(durationMs / (1000 * 60 * 60))
+    const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60))
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`
+    }
+    return `${minutes}m`
+  }
+
+  private static calculateMonitoringDuration(sessions: import('../types/api').Session[]): string {
+    if (sessions.length === 0) return '0 days'
+    
+    const earliest = sessions.reduce((earliest, session) => {
+      const sessionStart = new Date(session.start_ts)
+      return sessionStart < earliest ? sessionStart : earliest
+    }, new Date(sessions[0].start_ts))
+    
+    const latest = sessions.reduce((latest, session) => {
+      const sessionEnd = session.end_ts ? new Date(session.end_ts) : new Date()
+      return sessionEnd > latest ? sessionEnd : latest
+    }, new Date())
+    
+    const durationMs = latest.getTime() - earliest.getTime()
+    const days = Math.floor(durationMs / (1000 * 60 * 60 * 24))
+    const hours = Math.floor((durationMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+    
+    if (days > 0) {
+      return `${days} days ${hours} hours`
+    }
+    return `${hours} hours`
+  }
+
+  private static formatEventDetails(event: import('../types/api').Event): string {
+    switch (event.action) {
+      case 'connected':
+        return 'Client connected'
+      case 'disconnected':
+        return 'Client disconnected'
+      case 'subscribe':
+        return `Subscribed to ${event.topic}`
+      case 'unsubscribe':
+        return `Unsubscribed from ${event.topic}`
+      case 'publish':
+        return `Published to ${event.topic} (${event.payload_size || 0} bytes)`
+      default:
+        return event.action || 'Unknown action'
+    }
+  }
 }
 
 // Helper functions
