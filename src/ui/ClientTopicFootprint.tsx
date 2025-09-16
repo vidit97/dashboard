@@ -75,7 +75,7 @@ export const ClientTopicFootprintChart = ({ className, clientId }: ClientTopicFo
         filters: { active: 'is.true' }
       })
       
-      const clients = [...new Set(result.data.map(sub => sub.client))].sort()
+      const clients = [...new Set(result.data.map(sub => sub.og_client || sub.client))].sort()
       setAvailableClients(clients)
     } catch (err) {
       console.error('Error fetching clients:', err)

@@ -44,7 +44,7 @@ export const V2SubscriptionsPage: React.FC = () => {
       }
 
       if (clientFilter.trim()) {
-        filters['client'] = `ilike.*${clientFilter.trim()}*`
+        filters['og_client'] = `ilike.*${clientFilter.trim()}*`
       }
 
       const result = await GreApiService.getSubscriptionsPaginated({
@@ -217,7 +217,7 @@ export const V2SubscriptionsPage: React.FC = () => {
 
             <input
               type="text"
-              placeholder="Client ID filter..."
+              placeholder="Client filter..."
               value={clientFilter}
               onChange={(e) => setClientFilter(e.target.value)}
               style={{
@@ -300,7 +300,7 @@ export const V2SubscriptionsPage: React.FC = () => {
                       style={{ borderBottom: '1px solid #f1f5f9' }}
                     >
                       <td style={{ padding: '16px', fontWeight: '500', color: '#1f2937' }}>
-                        {sub.client}
+                        {sub.og_client || sub.client || 'Unknown'}
                       </td>
                       <td style={{
                         padding: '16px',
@@ -338,10 +338,10 @@ export const V2SubscriptionsPage: React.FC = () => {
                         </span>
                       </td>
                       <td style={{ padding: '16px', color: '#6b7280', fontSize: '14px' }}>
-                        {formatTimestamp(sub.last_subscribe_ts)}
+                        {formatTimestamp(sub.last_subscribe_ts || null)}
                       </td>
                       <td style={{ padding: '16px', color: '#6b7280', fontSize: '14px' }}>
-                        {formatTimestamp(sub.last_unsubscribe_ts)}
+                        {formatTimestamp(sub.last_unsubscribe_ts || null)}
                       </td>
                       <td style={{ padding: '16px' }}>
                         <span style={{

@@ -167,7 +167,7 @@ export const LiveActivity: React.FC<LiveActivityProps> = ({
                 {getActionLabel(event.action)}
               </div>
               <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '6px' }}>
-                {event.client && (
+                {(event.og_client || event.client) && (
                   <span style={{ 
                     fontFamily: 'monospace', 
                     background: '#ffffff', 
@@ -176,7 +176,7 @@ export const LiveActivity: React.FC<LiveActivityProps> = ({
                     border: '1px solid #e5e7eb',
                     marginRight: '8px'
                   }}>
-                    {event.client}
+                    {event.og_client || event.client}
                   </span>
                 )}
                 {event.topic && (

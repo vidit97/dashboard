@@ -993,8 +993,9 @@ export class GreApiService {
       const topicData = topicMap.get(sub.topic)!
       topicData.count++
       topicData.qos_breakdown[sub.qos] = (topicData.qos_breakdown[sub.qos] || 0) + 1
-      if (!topicData.clients.includes(sub.client)) {
-        topicData.clients.push(sub.client)
+      const clientName = sub.og_client || sub.client
+      if (!topicData.clients.includes(clientName)) {
+        topicData.clients.push(clientName)
       }
     })
 
@@ -1041,14 +1042,15 @@ export class GreApiService {
       const clientMap = new Map<string, ClientTopicFootprint>()
       
       activeSubscriptions.data.forEach(sub => {
-        if (!clientMap.has(sub.client)) {
-          clientMap.set(sub.client, {
-            client: sub.client,
+        const clientName = sub.og_client || sub.client
+        if (!clientMap.has(clientName)) {
+          clientMap.set(clientName, {
+            client: clientName,
             topics: []
           })
         }
         
-        clientMap.get(sub.client)!.topics.push({
+        clientMap.get(clientName)!.topics.push({
           topic: sub.topic,
           qos: sub.qos,
           total_clients_on_topic: topicClientCounts.get(sub.topic) || 1,

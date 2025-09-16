@@ -81,7 +81,7 @@ export const EventsPage: React.FC = () => {
       }
 
       if (clientFilter.trim()) {
-        baseParams.append('client', `like.*${clientFilter.trim()}*`)
+        baseParams.append('og_client', `like.*${clientFilter.trim()}*`)
       }
 
       if (usernameFilter.trim()) {
@@ -229,7 +229,7 @@ export const EventsPage: React.FC = () => {
         baseParams.append('topic', `like.*${topicFilter.trim()}*`)
       }
       if (clientFilter.trim()) {
-        baseParams.append('client', `like.*${clientFilter.trim()}*`)
+        baseParams.append('og_client', `like.*${clientFilter.trim()}*`)
       }
       if (usernameFilter.trim()) {
         baseParams.append('username', `like.*${usernameFilter.trim()}*`)
@@ -257,7 +257,7 @@ export const EventsPage: React.FC = () => {
         ...allEvents.map(event => [
           event.ts,
           event.action,
-          event.client || '',
+          event.og_client || event.client || '',
           event.topic || '',
           event.qos || '',
           event.retain || false,
@@ -691,7 +691,7 @@ export const EventsPage: React.FC = () => {
                     </span>
                   </td>
                   <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontSize: '13px', color: '#1f2937' }}>
-                    {event.client}
+                    {event.og_client || event.client || 'Unknown'}
                   </td>
                   <td style={{ 
                     padding: '12px 16px', 

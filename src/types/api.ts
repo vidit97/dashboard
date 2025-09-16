@@ -22,6 +22,7 @@ export interface Event {
   ts: string;
   action: string;
   client: string | null;
+  og_client?: string | null;  // Original client name from the database
   topic: string | null;
   qos: number | null;
   username: string | null;
@@ -43,11 +44,15 @@ export interface Subscription {
   id: number;
   session_id: number | null;
   client: string;
+  og_client?: string;  // Original client name from the database
   topic: string;
   qos: number;
   active: boolean;
   created_at: string;
   updated_at: string;
+  last_subscribe_ts?: string | null;
+  last_unsubscribe_ts?: string | null;
+  source?: string;
 }
 
 // Statistics Tables

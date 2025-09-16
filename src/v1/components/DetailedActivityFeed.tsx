@@ -192,7 +192,7 @@ export const DetailedActivityFeed: React.FC<DetailedActivityFeedProps> = ({
       
       // Search filters
       if (filters.clientSearch.trim()) {
-        baseParams.append('client', `like.*${filters.clientSearch.trim()}*`)
+        baseParams.append('og_client', `like.*${filters.clientSearch.trim()}*`)
       }
       
       if (filters.topicSearch.trim()) {
@@ -683,7 +683,7 @@ export const DetailedActivityFeed: React.FC<DetailedActivityFeedProps> = ({
                       marginBottom: '4px',
                       wordBreak: 'break-all'
                     }}>
-                      <strong>Client:</strong> {activity.client || <span style={{ color: '#9ca3af' }}>—</span>}
+                      <strong>Client:</strong> {activity.og_client || activity.client || <span style={{ color: '#9ca3af' }}>—</span>}
                     </div>
 
                     <div style={{
@@ -774,13 +774,15 @@ export const DetailedActivityFeed: React.FC<DetailedActivityFeedProps> = ({
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap'
                     }}>
-                      {activity.client ? (
+                      {(activity.og_client || activity.client) ? (
                         <div style={{
                           fontFamily: 'monospace',
                           fontSize: '11px',
                           color: '#1f2937'
                         }}>
-                          {activity.client.length > 25 ? activity.client.substring(0, 25) + '...' : activity.client}
+                          {((activity.og_client || activity.client) || '').length > 25 ? 
+                            ((activity.og_client || activity.client) || '').substring(0, 25) + '...' : 
+                            (activity.og_client || activity.client)}
                         </div>
                       ) : (
                         <div style={{ color: '#9ca3af', fontSize: '11px' }}>—</div>

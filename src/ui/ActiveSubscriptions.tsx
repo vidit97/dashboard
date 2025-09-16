@@ -369,7 +369,7 @@ export const ActiveSubscriptions = ({ className, refreshTrigger }: ActiveSubscri
               : `Subscriptions by Topic (${selectedTopics.length} selected)`
             }
           </h4>
-          <div className="chart-container">
+          <div style={{ width: '100%', height: '400px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -386,7 +386,7 @@ export const ActiveSubscriptions = ({ className, refreshTrigger }: ActiveSubscri
                 <Tooltip 
                   formatter={(value, name) => [
                     typeof value === 'number' ? value.toLocaleString() : value,
-                    name === 'count' ? 'Active Subscriptions' : 'Unique Clients'
+                    name === 'count' ? 'Active Subscriptions' : 'Unique Devices'
                   ]}
                   labelFormatter={(label) => {
                     const item = chartData.find(d => d.topic === label)
@@ -415,7 +415,7 @@ export const ActiveSubscriptions = ({ className, refreshTrigger }: ActiveSubscri
                 <tr>
                   <th>Topic</th>
                   <th>Active Subscriptions</th>
-                  <th>Unique Clients</th>
+                  <th>Unique Devices</th>
                   <th>QoS Distribution</th>
                 </tr>
               </thead>

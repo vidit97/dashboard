@@ -58,7 +58,7 @@ export const SubscriptionState = ({ className, refreshTrigger }: SubscriptionSta
       })
 
       const clients: ClientSubscription[] = subscriptions.data.map(sub => ({
-        client: sub.client,
+        client: sub.og_client || sub.client,
         qos: sub.qos,
         created_at: sub.created_at,
         session_id: sub.session_id
@@ -124,7 +124,7 @@ export const SubscriptionState = ({ className, refreshTrigger }: SubscriptionSta
         <div>
           <h3 className="chart-title">Subscription State</h3>
           <p className="chart-subtitle">
-            Filter by topic to view unique clients and their subscription details
+            Filter by topic to view unique devices and their subscription details
           </p>
         </div>
         <div className="chart-controls">
@@ -167,7 +167,7 @@ export const SubscriptionState = ({ className, refreshTrigger }: SubscriptionSta
             <option value="">Select a topic to view its clients...</option>
             {data.topicBreakdown.map((topic) => (
               <option key={topic.topic} value={topic.topic}>
-                {topic.topic} ({topic.clients.length} unique clients)
+                {topic.topic} ({topic.clients.length} unique devices)
               </option>
             ))}
           </select>
@@ -185,7 +185,7 @@ export const SubscriptionState = ({ className, refreshTrigger }: SubscriptionSta
                 </div>
               </div>
               <div className="metric-card" style={{ borderLeftColor: '#7c3aed' }}>
-                <div className="metric-label">Unique Clients</div>
+                <div className="metric-label">Unique Devices</div>
                 <div className="metric-value">
                   {data.topicBreakdown.find(t => t.topic === selectedTopic)?.clients.length || 0}
                 </div>

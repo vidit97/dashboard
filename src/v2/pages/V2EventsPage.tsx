@@ -455,8 +455,8 @@ export const V2EventsPage: React.FC = () => {
       }
 
       if (clientFilters.length > 0) {
-        // For text-based client filters, use OR with ilike
-        const clientConditions = clientFilters.map(client => `client.ilike.*${client.trim()}*`).join(',')
+        // For text-based client filters, use OR with ilike on og_client field
+        const clientConditions = clientFilters.map(client => `og_client.ilike.*${client.trim()}*`).join(',')
         if (topicFilters.length > 0) {
           // If we already have OR conditions, we need to handle this differently
           // For now, let's use a simpler approach with multiple requests or combine conditions
@@ -649,7 +649,7 @@ export const V2EventsPage: React.FC = () => {
         params.append('or', `(${topicConditions})`)
       }
       if (clientFilters.length > 0) {
-        const clientConditions = clientFilters.map(client => `client.ilike.*${client.trim()}*`).join(',')
+        const clientConditions = clientFilters.map(client => `og_client.ilike.*${client.trim()}*`).join(',')
         if (topicFilters.length > 0) {
           params.append('and', `(${clientConditions})`)
         } else {
@@ -680,7 +680,7 @@ export const V2EventsPage: React.FC = () => {
         ...allEvents.map(event => [
           event.ts,
           event.action,
-          event.client || '',
+          event.og_client || event.client || '',
           event.username || '',
           event.topic || '',
           event.qos?.toString() || '',
@@ -1118,7 +1118,7 @@ export const V2EventsPage: React.FC = () => {
                       </span>
                     </td>
                     <td style={{ padding: '16px', fontWeight: '500', color: '#1f2937' }}>
-                      {event.client}
+                      {event.og_client || event.client || 'Unknown'}
                     </td>
                     <td style={{ padding: '16px', color: '#6b7280' }}>
                       {event.username || '-'}
