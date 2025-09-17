@@ -6,14 +6,7 @@ import { watchMQTTService } from '../../services/api'
 import { OverviewData, ContainerData } from '../../config/api'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
-import 'jspdf-autotable'
-
-// Extend jsPDF with autoTable typing
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF
-  }
-}
+import autoTable from 'jspdf-autotable'
 
 export const V2ReportsPage: React.FC = () => {
   const { state } = useGlobalState()
@@ -400,7 +393,7 @@ export const V2ReportsPage: React.FC = () => {
       ['Active Sessions', reportData.generalInfo.activeSessions.toString()]
     ]
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: 55,
       head: [['Field', 'Value']],
       body: generalData,
@@ -427,10 +420,59 @@ export const V2ReportsPage: React.FC = () => {
         session.subscriptions_count.toString()
       ])
 
-      doc.autoTable({
+      autoTable(doc, {
         startY: 25,
         head: [['Session ID', 'Client', 'Status', 'Start', 'End', 'Duration', 'IP:Port', 'Protocol', 'Subs']],
         body: sessionsData,
+        theme: 'grid',
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [59, 130, 246] }
+      })
+    }
+
+    // Topic Subscriptions Table
+    if (reportData.topicSubscriptions && reportData.topicSubscriptions.length > 0) {
+      doc.addPage()
+      doc.setFontSize(16)
+      doc.text('Topic Subscriptions', 20, 20)
+
+      const subscriptionsData = reportData.topicSubscriptions.slice(0, 20).map(sub => [
+        sub.client,
+        sub.topic,
+        sub.qos.toString(),
+        sub.active ? 'Active' : 'Inactive',
+        new Date(sub.last_subscribe_ts).toLocaleDateString(),
+        sub.last_unsubscribe_ts ? new Date(sub.last_unsubscribe_ts).toLocaleDateString() : 'N/A'
+      ])
+
+      autoTable(doc, {
+        startY: 25,
+        head: [['Client', 'Topic', 'QoS', 'Status', 'Subscribed', 'Unsubscribed']],
+        body: subscriptionsData,
+        theme: 'grid',
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [59, 130, 246] }
+      })
+    }
+
+    // Recent Activity Table
+    if (reportData.recentActivity && reportData.recentActivity.length > 0) {
+      doc.addPage()
+      doc.setFontSize(16)
+      doc.text('Recent Activity', 20, 20)
+
+      const activityData = reportData.recentActivity.slice(0, 20).map(activity => [
+        new Date(activity.ts).toLocaleDateString(),
+        activity.action,
+        activity.client,
+        activity.topic || 'N/A',
+        activity.details
+      ])
+
+      autoTable(doc, {
+        startY: 25,
+        head: [['Date', 'Action', 'Client', 'Topic', 'Details']],
+        body: activityData,
         theme: 'grid',
         styles: { fontSize: 8 },
         headStyles: { fillColor: [59, 130, 246] }
@@ -467,7 +509,7 @@ export const V2ReportsPage: React.FC = () => {
       ['Total Events', totalEvents.toString()]
     ]
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: 55,
       head: [['Metric', 'Count']],
       body: summaryData,
@@ -490,7 +532,7 @@ export const V2ReportsPage: React.FC = () => {
         event.broker || 'N/A'
       ])
 
-      doc.autoTable({
+      autoTable(doc, {
         startY: 25,
         head: [['Date', 'Client', 'Username', 'Action', 'Broker']],
         body: authData,
@@ -517,7 +559,7 @@ export const V2ReportsPage: React.FC = () => {
         mod.payload_json?.allow ? 'Allow' : 'Deny'
       ])
 
-      doc.autoTable({
+      autoTable(doc, {
         startY: securityReportData.authenticationEvents?.length > 0 ? 25 : 105,
         head: [['Date', 'Actor', 'Operation', 'Role', 'Topic', 'Access']],
         body: aclData,
@@ -543,11 +585,11 @@ export const V2ReportsPage: React.FC = () => {
     doc.setFontSize(12)
     doc.text(`Generated: ${timestamp}`, 20, 30)
 
-    // Performance Data (show first 20 entries like other reports for consistency)
+    // Performance Data (show only the most recent entry)
     doc.setFontSize(16)
     doc.text('Performance Metrics', 20, 50)
 
-    const maxVisibleEntries = 20 // Consistent with other reports
+    const maxVisibleEntries = 1 // Show only 1 entry (not 2 like UI)
     const performanceData = performanceReportData.slice(0, maxVisibleEntries).map(record => [
       record.timestamp,
       record.health,
@@ -561,7 +603,7 @@ export const V2ReportsPage: React.FC = () => {
       record.retainedMessages.toString()
     ])
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: 55,
       head: [['Timestamp', 'Health', 'Uptime (hrs)', 'CPU %', 'Memory %', 'Disk', 'Connected', 'Active', 'Subs', 'Retained']],
       body: performanceData,
@@ -586,8 +628,8 @@ export const V2ReportsPage: React.FC = () => {
     const end = new Date(endDate)
     const data = []
 
-    // Generate 2 records with random timestamps between dates
-    for (let i = 0; i < 2; i++) {
+    // Generate 1 record with timestamp between dates
+    for (let i = 0; i < 1; i++) {
       // Calculate random timestamp close to middle of date range
       const middle = new Date((start.getTime() + end.getTime()) / 2)
       const variance = (end.getTime() - start.getTime()) * 0.3 // 30% variance around middle
