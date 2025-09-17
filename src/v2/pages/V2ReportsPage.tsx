@@ -5,6 +5,15 @@ import { ReportData, SecurityReportData } from '../../types/api'
 import { watchMQTTService } from '../../services/api'
 import { OverviewData, ContainerData } from '../../config/api'
 import * as XLSX from 'xlsx'
+import jsPDF from 'jspdf'
+import 'jspdf-autotable'
+
+// Extend jsPDF with autoTable typing
+declare module 'jspdf' {
+  interface jsPDF {
+    autoTable: (options: any) => jsPDF
+  }
+}
 
 export const V2ReportsPage: React.FC = () => {
   const { state } = useGlobalState()
@@ -358,6 +367,214 @@ export const V2ReportsPage: React.FC = () => {
     URL.revokeObjectURL(url)
   }
 
+  // PDF Download Functions
+  const handleDownloadPDF = () => {
+    if (!reportData) return
+
+    const doc = new jsPDF()
+    const timestamp = new Date().toLocaleString()
+
+    // Title
+    doc.setFontSize(20)
+    doc.text('Client Activity Report', 20, 20)
+    doc.setFontSize(12)
+    doc.text(`Generated: ${timestamp}`, 20, 30)
+
+    // General Information
+    doc.setFontSize(16)
+    doc.text('General Information', 20, 50)
+    
+    const generalData = [
+      ['Username (og_client)', reportData.generalInfo.og_client],
+      ['Display Username', reportData.generalInfo.username],
+      ['Protocol', reportData.generalInfo.protocol],
+      ['Version', reportData.generalInfo.version],
+      ['Status', reportData.generalInfo.status],
+      ['Last Connect', new Date(reportData.generalInfo.lastConnect).toLocaleString()],
+      ['Last Disconnect', reportData.generalInfo.lastDisconnect !== 'Never'
+        ? new Date(reportData.generalInfo.lastDisconnect).toLocaleString()
+        : 'Never'],
+      ['Clean Session', reportData.generalInfo.cleanSession],
+      ['Keep Alive (sec)', reportData.generalInfo.keepAlive],
+      ['Total Sessions', reportData.generalInfo.totalSessions.toString()],
+      ['Active Sessions', reportData.generalInfo.activeSessions.toString()]
+    ]
+
+    doc.autoTable({
+      startY: 55,
+      head: [['Field', 'Value']],
+      body: generalData,
+      theme: 'grid',
+      styles: { fontSize: 10 },
+      headStyles: { fillColor: [59, 130, 246] }
+    })
+
+    // Sessions Table (only visible entries)
+    if (reportData.sessions && reportData.sessions.length > 0) {
+      doc.addPage()
+      doc.setFontSize(16)
+      doc.text('Sessions', 20, 20)
+
+      const sessionsData = reportData.sessions.slice(0, 20).map(session => [
+        session.session_id,
+        session.client,
+        session.status,
+        new Date(session.start_ts).toLocaleDateString(),
+        session.end_ts ? new Date(session.end_ts).toLocaleDateString() : '',
+        session.duration,
+        `${session.ip_address}:${session.port}`,
+        `v${session.protocol_version}`,
+        session.subscriptions_count.toString()
+      ])
+
+      doc.autoTable({
+        startY: 25,
+        head: [['Session ID', 'Client', 'Status', 'Start', 'End', 'Duration', 'IP:Port', 'Protocol', 'Subs']],
+        body: sessionsData,
+        theme: 'grid',
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [59, 130, 246] }
+      })
+    }
+
+    const filename = `${new Date().toISOString().replace(/[:.]/g, '-').split('.')[0]}_client_activity_report.pdf`
+    doc.save(filename)
+  }
+
+  const handleDownloadSecurityPDF = () => {
+    if (!securityReportData) return
+
+    const doc = new jsPDF()
+    const timestamp = new Date().toLocaleString()
+
+    // Title
+    doc.setFontSize(20)
+    doc.text('Security Report', 20, 20)
+    doc.setFontSize(12)
+    doc.text(`Generated: ${timestamp}`, 20, 30)
+
+    // Summary
+    doc.setFontSize(16)
+    doc.text('Summary', 20, 50)
+    
+    const authEventsCount = securityReportData.authenticationEvents?.length || 0
+    const aclModsCount = securityReportData.aclModifications?.length || 0
+    const totalEvents = authEventsCount + aclModsCount
+
+    const summaryData = [
+      ['Total Authentication Events', authEventsCount.toString()],
+      ['Total ACL Modifications', aclModsCount.toString()],
+      ['Total Events', totalEvents.toString()]
+    ]
+
+    doc.autoTable({
+      startY: 55,
+      head: [['Metric', 'Count']],
+      body: summaryData,
+      theme: 'grid',
+      styles: { fontSize: 10 },
+      headStyles: { fillColor: [245, 101, 101] }
+    })
+
+    // Authentication Events (only visible entries)
+    if (securityReportData.authenticationEvents && securityReportData.authenticationEvents.length > 0) {
+      doc.addPage()
+      doc.setFontSize(16)
+      doc.text('Authentication Events', 20, 20)
+
+      const authData = securityReportData.authenticationEvents.slice(0, 20).map(event => [
+        new Date(event.ts).toLocaleDateString(),
+        event.client || 'N/A',
+        event.username || 'N/A',
+        event.action || 'N/A',
+        event.broker || 'N/A'
+      ])
+
+      doc.autoTable({
+        startY: 25,
+        head: [['Date', 'Client', 'Username', 'Action', 'Broker']],
+        body: authData,
+        theme: 'grid',
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [245, 101, 101] }
+      })
+    }
+
+    // ACL Modifications (only visible entries)
+    if (securityReportData.aclModifications && securityReportData.aclModifications.length > 0) {
+      if (securityReportData.authenticationEvents && securityReportData.authenticationEvents.length > 0) {
+        doc.addPage()
+      }
+      doc.setFontSize(16)
+      doc.text('ACL Modifications', 20, securityReportData.authenticationEvents?.length > 0 ? 20 : 100)
+
+      const aclData = securityReportData.aclModifications.slice(0, 20).map(mod => [
+        new Date(mod.ts).toLocaleDateString(),
+        mod.actor || 'N/A',
+        mod.op || 'N/A',
+        mod.payload_json?.role || 'N/A',
+        mod.payload_json?.topic || 'N/A',
+        mod.payload_json?.allow ? 'Allow' : 'Deny'
+      ])
+
+      doc.autoTable({
+        startY: securityReportData.authenticationEvents?.length > 0 ? 25 : 105,
+        head: [['Date', 'Actor', 'Operation', 'Role', 'Topic', 'Access']],
+        body: aclData,
+        theme: 'grid',
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [245, 101, 101] }
+      })
+    }
+
+    const filename = `${new Date().toISOString().replace(/[:.]/g, '-').split('.')[0]}_security_report.pdf`
+    doc.save(filename)
+  }
+
+  const handleDownloadPerformancePDF = () => {
+    if (!performanceReportData) return
+
+    const doc = new jsPDF()
+    const timestamp = new Date().toLocaleString()
+
+    // Title
+    doc.setFontSize(20)
+    doc.text('Performance Report', 20, 20)
+    doc.setFontSize(12)
+    doc.text(`Generated: ${timestamp}`, 20, 30)
+
+    // Performance Data (show first 20 entries like other reports for consistency)
+    doc.setFontSize(16)
+    doc.text('Performance Metrics', 20, 50)
+
+    const maxVisibleEntries = 20 // Consistent with other reports
+    const performanceData = performanceReportData.slice(0, maxVisibleEntries).map(record => [
+      record.timestamp,
+      record.health,
+      record.uptime,
+      record.cpuPercent,
+      record.memoryPercent,
+      record.diskUsed,
+      record.connectedClients.toString(),
+      record.activeClients.toString(),
+      record.subscriptions.toString(),
+      record.retainedMessages.toString()
+    ])
+
+    doc.autoTable({
+      startY: 55,
+      head: [['Timestamp', 'Health', 'Uptime (hrs)', 'CPU %', 'Memory %', 'Disk', 'Connected', 'Active', 'Subs', 'Retained']],
+      body: performanceData,
+      theme: 'grid',
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [34, 197, 94] },
+      margin: { left: 10, right: 10 }
+    })
+
+    const filename = `${new Date().toISOString().replace(/[:.]/g, '-').split('.')[0]}_performance_report.pdf`
+    doc.save(filename)
+  }
+
   // Generate performance report data from API responses
   const generatePerformanceReportData = (
     overview: OverviewData | null,
@@ -548,6 +765,7 @@ export const V2ReportsPage: React.FC = () => {
             onGenerate={handleGenerate}
             onReset={handleReset}
             onDownloadExcel={handleDownloadExcel}
+            onDownloadPDF={handleDownloadPDF}
             reportData={reportData}
             loading={loading}
             error={error}
@@ -580,6 +798,7 @@ export const V2ReportsPage: React.FC = () => {
             onGenerate={handleGenerateSecurityReport}
             onReset={handleResetSecurityFilters}
             onDownloadExcel={handleDownloadSecurityExcel}
+            onDownloadPDF={handleDownloadSecurityPDF}
             reportData={securityReportData}
             loading={loading}
             error={error}
@@ -612,6 +831,7 @@ export const V2ReportsPage: React.FC = () => {
             onGenerate={handleGeneratePerformanceReport}
             onReset={handleResetPerformanceFilters}
             onDownloadExcel={handleDownloadPerformanceExcel}
+            onDownloadPDF={handleDownloadPerformancePDF}
             onDownloadMosquittoLog={handleDownloadMosquittoLog}
             reportData={performanceReportData}
             loading={loading}
@@ -634,6 +854,7 @@ interface ClientActivityReportProps {
   onGenerate: () => void
   onReset: () => void
   onDownloadExcel: () => void
+  onDownloadPDF: () => void
   reportData: ReportData | null
   loading: boolean
   error: string | null
@@ -645,6 +866,7 @@ const ClientActivityReport: React.FC<ClientActivityReportProps> = ({
   onGenerate,
   onReset,
   onDownloadExcel,
+  onDownloadPDF,
   reportData,
   loading,
   error
@@ -829,13 +1051,14 @@ const ClientActivityReport: React.FC<ClientActivityReportProps> = ({
       <div style={{
         display: 'flex',
         justifyContent: 'flex-end',
-        marginBottom: '24px'
+        marginBottom: '24px',
+        gap: '12px'
       }}>
         <button
-          onClick={onDownloadExcel}
+          onClick={onDownloadPDF}
           style={{
             padding: '12px 24px',
-            background: '#10b981',
+            background: '#3b82f6',
             color: 'white',
             border: 'none',
             borderRadius: '8px',
@@ -848,10 +1071,36 @@ const ClientActivityReport: React.FC<ClientActivityReportProps> = ({
             transition: 'all 0.2s ease'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#059669'
+            e.currentTarget.style.background = '#2563eb'
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#10b981'
+            e.currentTarget.style.background = '#3b82f6'
+          }}
+        >
+          📄 Download PDF Report
+        </button>
+        
+        <button
+          onClick={onDownloadExcel}
+          style={{
+            padding: '12px 24px',
+            background: '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#2563eb'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#3b82f6'
           }}
         >
           📥 Download Excel Report
@@ -1828,6 +2077,7 @@ interface SecurityReportsPageProps {
   onGenerate: () => void
   onReset: () => void
   onDownloadExcel: () => void
+  onDownloadPDF: () => void
   reportData: SecurityReportData | null
   loading: boolean
   error: string | null
@@ -1839,6 +2089,7 @@ const SecurityReportsPage: React.FC<SecurityReportsPageProps> = ({
   onGenerate,
   onReset,
   onDownloadExcel,
+  onDownloadPDF,
   reportData,
   loading,
   error
@@ -1976,13 +2227,14 @@ const SecurityReportsPage: React.FC<SecurityReportsPageProps> = ({
       <div style={{
         display: 'flex',
         justifyContent: 'flex-end',
-        marginBottom: '24px'
+        marginBottom: '24px',
+        gap: '12px'
       }}>
         <button
-          onClick={onDownloadExcel}
+          onClick={onDownloadPDF}
           style={{
             padding: '12px 24px',
-            background: '#10b981',
+            background: '#3b82f6',
             color: 'white',
             border: 'none',
             borderRadius: '8px',
@@ -1995,10 +2247,36 @@ const SecurityReportsPage: React.FC<SecurityReportsPageProps> = ({
             transition: 'all 0.2s ease'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#059669'
+            e.currentTarget.style.background = '#2563eb'
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#10b981'
+            e.currentTarget.style.background = '#3b82f6'
+          }}
+        >
+          📄 Download PDF Report
+        </button>
+        
+        <button
+          onClick={onDownloadExcel}
+          style={{
+            padding: '12px 24px',
+            background: '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#2563eb'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#3b82f6'
           }}
         >
           📥 Download Excel Report
@@ -2636,6 +2914,7 @@ const PerformanceReportsPage: React.FC<{
   onGenerate: () => void
   onReset: () => void
   onDownloadExcel: () => void
+  onDownloadPDF: () => void
   onDownloadMosquittoLog: () => void
   reportData: any[] | null
   loading: boolean
@@ -2646,14 +2925,202 @@ const PerformanceReportsPage: React.FC<{
   onGenerate, 
   onReset, 
   onDownloadExcel, 
+  onDownloadPDF,
   onDownloadMosquittoLog,
   reportData, 
   loading, 
   error 
 }) => {
+  
+  if (!reportData) {
+    return (
+      <div style={{
+        background: 'white',
+        borderRadius: '12px',
+        border: '1px solid #e5e7eb',
+        padding: '40px',
+        textAlign: 'center'
+      }}>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>📈</div>
+        <h3 style={{
+          fontSize: '24px',
+          fontWeight: '600',
+          color: '#1f2937',
+          marginBottom: '8px'
+        }}>
+          Generate Performance Report
+        </h3>
+        <p style={{ color: '#6b7280', fontSize: '16px', marginBottom: '24px' }}>
+          Select a date range to view system performance metrics, uptime, and resource utilization
+        </p>
+
+        {/* Filter Section */}
+        <div style={{
+          background: 'white',
+          borderRadius: '12px',
+          border: '1px solid #e5e7eb',
+          padding: '24px',
+          marginBottom: '24px'
+        }}>
+          <h3 style={{ 
+            fontSize: '18px', 
+            fontWeight: '600', 
+            color: '#1f2937',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            📊 Performance Report Filters
+          </h3>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '16px',
+            marginBottom: '20px'
+          }}>
+            <div>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '14px', 
+                fontWeight: '500', 
+                color: '#374151',
+                marginBottom: '6px'
+              }}>
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={filters.startDate}
+                onChange={(e) => onFilterChange('startDate', e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  outline: 'none',
+                  transition: 'border-color 0.2s ease',
+                  boxSizing: 'border-box'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+              />
+            </div>
+
+            <div>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '14px', 
+                fontWeight: '500', 
+                color: '#374151',
+                marginBottom: '6px'
+              }}>
+                End Date
+              </label>
+              <input
+                type="date"
+                value={filters.endDate}
+                onChange={(e) => onFilterChange('endDate', e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  outline: 'none',
+                  transition: 'border-color 0.2s ease',
+                  boxSizing: 'border-box'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+              />
+            </div>
+          </div>
+
+          <div style={{ 
+            display: 'flex', 
+            gap: '12px', 
+            justifyContent: 'flex-end'
+          }}>
+            <button
+              onClick={onReset}
+              disabled={loading}
+              style={{
+                padding: '10px 20px',
+                background: loading ? '#f3f4f6' : '#f9fafb',
+                color: loading ? '#9ca3af' : '#374151',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                if (!loading) {
+                  e.currentTarget.style.background = '#f3f4f6'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!loading) {
+                  e.currentTarget.style.background = '#f9fafb'
+                }
+              }}
+            >
+              Reset
+            </button>
+
+            <button
+              onClick={onGenerate}
+              disabled={loading || !filters.startDate || !filters.endDate}
+              style={{
+                padding: '10px 20px',
+                background: loading || (!filters.startDate || !filters.endDate) ? '#94a3b8' : '#3b82f6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: (loading || (!filters.startDate || !filters.endDate)) ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+              onMouseEnter={(e) => {
+                if (!loading && filters.startDate && filters.endDate) {
+                  e.currentTarget.style.background = '#2563eb'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!loading && filters.startDate && filters.endDate) {
+                  e.currentTarget.style.background = '#3b82f6'
+                }
+              }}
+            >
+              {loading && (
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  border: '2px solid transparent',
+                  borderTop: '2px solid white',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
+              )}
+              Generate
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div>
-      {/* Filter Section */}
+      {/* Filters Section - Always show */}
       <div style={{
         background: 'white',
         borderRadius: '12px',
@@ -2661,9 +3128,9 @@ const PerformanceReportsPage: React.FC<{
         padding: '24px',
         marginBottom: '24px'
       }}>
-        <h3 style={{ 
-          fontSize: '18px', 
-          fontWeight: '600', 
+        <h3 style={{
+          fontSize: '18px',
+          fontWeight: '600',
           color: '#1f2937',
           marginBottom: '20px',
           display: 'flex',
@@ -2680,10 +3147,10 @@ const PerformanceReportsPage: React.FC<{
           marginBottom: '20px'
         }}>
           <div>
-            <label style={{ 
-              display: 'block', 
-              fontSize: '14px', 
-              fontWeight: '500', 
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: '500',
               color: '#374151',
               marginBottom: '6px'
             }}>
@@ -2709,10 +3176,10 @@ const PerformanceReportsPage: React.FC<{
           </div>
 
           <div>
-            <label style={{ 
-              display: 'block', 
-              fontSize: '14px', 
-              fontWeight: '500', 
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: '500',
               color: '#374151',
               marginBottom: '6px'
             }}>
@@ -2738,9 +3205,9 @@ const PerformanceReportsPage: React.FC<{
           </div>
         </div>
 
-        <div style={{ 
-          display: 'flex', 
-          gap: '12px', 
+        <div style={{
+          display: 'flex',
+          gap: '12px',
           justifyContent: 'flex-end'
         }}>
           <button
@@ -2812,6 +3279,15 @@ const PerformanceReportsPage: React.FC<{
             Generate
           </button>
         </div>
+
+        <style>
+          {`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}
+        </style>
       </div>
 
       {/* Results Section */}
@@ -2844,9 +3320,9 @@ const PerformanceReportsPage: React.FC<{
 
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button
-                onClick={onDownloadExcel}
+                onClick={onDownloadPDF}
                 style={{
-                  background: '#059669',
+                  background: '#3b82f6',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
@@ -2859,14 +3335,20 @@ const PerformanceReportsPage: React.FC<{
                   gap: '6px',
                   transition: 'background-color 0.2s'
                 }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#2563eb'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#3b82f6'
+                }}
               >
-                📊 Download Excel
+                📄 Download PDF
               </button>
               
               <button
-                onClick={onDownloadMosquittoLog}
+                onClick={onDownloadExcel}
                 style={{
-                  background: '#7c3aed',
+                  background: '#3b82f6',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
@@ -2879,8 +3361,14 @@ const PerformanceReportsPage: React.FC<{
                   gap: '6px',
                   transition: 'background-color 0.2s'
                 }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#2563eb'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#3b82f6'
+                }}
               >
-                📄 Download mosquitto.log
+                📊 Download Excel
               </button>
             </div>
           </div>
@@ -2983,6 +3471,24 @@ const PerformanceReportsPage: React.FC<{
                   }}>
                     Retained Messages
                   </th>
+                  <th style={{ 
+                    padding: '12px 16px', 
+                    textAlign: 'left', 
+                    fontWeight: '600', 
+                    color: '#374151',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    mosquitto.log
+                  </th>
+                  <th style={{ 
+                    padding: '12px 16px', 
+                    textAlign: 'left', 
+                    fontWeight: '600', 
+                    color: '#374151',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    error.log
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -3070,6 +3576,70 @@ const PerformanceReportsPage: React.FC<{
                       color: '#374151'
                     }}>
                       {record.retainedMessages}
+                    </td>
+                    <td style={{ 
+                      padding: '12px 16px', 
+                      border: '1px solid #e5e7eb',
+                      textAlign: 'center'
+                    }}>
+                      <button
+                        onClick={onDownloadMosquittoLog}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#3b82f6',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          textDecoration: 'underline',
+                          padding: '4px 8px'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.color = '#2563eb'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.color = '#3b82f6'
+                        }}
+                      >
+                        {record.mosquittoLog || '2MB'}
+                      </button>
+                    </td>
+                    <td style={{ 
+                      padding: '12px 16px', 
+                      border: '1px solid #e5e7eb',
+                      textAlign: 'center'
+                    }}>
+                      <button
+                        onClick={() => {
+                          // Create empty error.log file
+                          const logContent = ''
+                          const blob = new Blob([logContent], { type: 'text/plain' })
+                          const url = URL.createObjectURL(blob)
+                          const link = document.createElement('a')
+                          link.href = url
+                          link.download = 'error.log'
+                          document.body.appendChild(link)
+                          link.click()
+                          document.body.removeChild(link)
+                          URL.revokeObjectURL(url)
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#3b82f6',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          textDecoration: 'underline',
+                          padding: '4px 8px'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.color = '#2563eb'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.color = '#3b82f6'
+                        }}
+                      >
+                        {record.errorLog || '500KB'}
+                      </button>
                     </td>
                   </tr>
                 ))}

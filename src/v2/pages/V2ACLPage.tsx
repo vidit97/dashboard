@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useGlobalState } from '../hooks/useGlobalState'
 // Reusing existing ACL components
 import { OverviewSection } from '../../components/acl/OverviewSection'
@@ -6,16 +6,62 @@ import { RolesSection } from '../../components/acl/RolesSection'
 import { ClientsSection } from '../../components/acl/ClientsSection'
 import { BackupsSection } from '../../components/acl/BackupsSection'
 import { ActivitySection } from '../../components/acl/ActivitySection'
+import { ACL_API_CONFIG } from '../../config/aclApi'
 
 type ACLTab = 'overview' | 'roles' | 'clients' | 'activity' | 'backups'
+
+interface BackupData {
+  id: number
+  taken_at: string
+}
 
 export const V2ACLPage: React.FC = () => {
   const { state } = useGlobalState()
   const [activeTab, setActiveTab] = useState<ACLTab>('overview')
   const [lastRefresh, setLastRefresh] = useState(new Date())
+  const [backupData, setBackupData] = useState<BackupData | null>(null)
+  const [backupLoading, setBackupLoading] = useState(false)
+
+  const fetchBackupData = async () => {
+    setBackupLoading(true)
+    try {
+      const baseUrl = ACL_API_CONFIG.BASE_URL
+      const url = `${baseUrl}${ACL_API_CONFIG.ENDPOINTS.DYN_BACKUPS}?broker=eq.${state.broker}&order=taken_at.desc&limit=1&select=id,taken_at`
+      const response = await fetch(url)
+      if (response.ok) {
+        const data = await response.json()
+        if (data && data.length > 0) {
+          setBackupData(data[0])
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch backup data:', error)
+    } finally {
+      setBackupLoading(false)
+    }
+  }
+
+  const getTimeAgo = (timestamp: string): string => {
+    const now = new Date()
+    const takenAt = new Date(timestamp)
+    const diffMs = now.getTime() - takenAt.getTime()
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+
+    if (diffHours < 1) {
+      const diffMinutes = Math.floor(diffMs / (1000 * 60))
+      return `${diffMinutes}m ago`
+    }
+
+    return `${diffHours}h ago`
+  }
+
+  useEffect(() => {
+    fetchBackupData()
+  }, [state.broker])
 
   const handleRefresh = () => {
     setLastRefresh(new Date())
+    fetchBackupData()
   }
 
   const tabs = [
@@ -98,8 +144,10 @@ export const V2ACLPage: React.FC = () => {
           border: '1px solid #e5e7eb',
           textAlign: 'center'
         }}>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#f59e0b' }}>v127</div>
-          <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>Last Refresh</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#f59e0b' }}>
+            {backupLoading ? '...' : backupData ? `v${backupData.id}` : 'v127'}
+          </div>
+          <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>Version</div>
         </div>
         <div style={{
           background: 'white',
@@ -108,7 +156,9 @@ export const V2ACLPage: React.FC = () => {
           border: '1px solid #e5e7eb',
           textAlign: 'center'
         }}>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#8b5cf6' }}>2h ago</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#8b5cf6' }}>
+            {backupLoading ? '...' : backupData ? getTimeAgo(backupData.taken_at) : '2h ago'}
+          </div>
           <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>Last Backup</div>
         </div>
       </div>
