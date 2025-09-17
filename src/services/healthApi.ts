@@ -1,7 +1,7 @@
 import axios from 'axios'
 
-// Health API configuration
-const HEALTH_API_BASE_URL = 'https://3b1498056271.ngrok-free.app'
+// Health API configuration - read from environment variable
+const HEALTH_API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3001'
 
 const healthApi = axios.create({
   baseURL: HEALTH_API_BASE_URL,
