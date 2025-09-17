@@ -199,7 +199,7 @@ export const V2OverviewPage: React.FC = () => {
               <span>•</span>
               <span>Uptime: {loading ? '--' : overview ? formatUptime(overview.uptime_seconds) : '--'}</span>
               <span>•</span>
-              <span>Version v5.0.4</span>
+              <span>Version v2.0.22</span>
             </div>
           </div>
         </div>
