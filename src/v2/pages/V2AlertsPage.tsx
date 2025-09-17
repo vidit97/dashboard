@@ -162,11 +162,10 @@ export const V2AlertsPage: React.FC = () => {
   return (
     <div style={{
       width: '100%',
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
+      padding: '24px',
       gap: '24px',
-      padding: '24px'
+      display: 'flex',
+      flexDirection: 'column'
     }}>
       {/* Page Header */}
       <div>
@@ -398,10 +397,7 @@ export const V2AlertsPage: React.FC = () => {
         background: 'white',
         borderRadius: '12px',
         border: '1px solid #e5e7eb',
-        overflow: 'hidden',
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column'
+        overflow: 'hidden'
       }}>
         <div style={{ padding: '20px', borderBottom: '1px solid #e5e7eb' }}>
           <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
@@ -411,7 +407,7 @@ export const V2AlertsPage: React.FC = () => {
             Last will and testament messages from disconnected MQTT clients
           </p>
         </div>
-        <div style={{ flex: 1 }}>
+        <div className="api-table-content">
           <ApiTable apiType="wills" />
         </div>
       </div>
