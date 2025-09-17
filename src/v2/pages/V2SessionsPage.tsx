@@ -8,6 +8,192 @@ import RecentConnectDisconnects from '../../components/RecentConnectDisconnects'
 import ClientGantt from '../../components/ClientGantt'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
+// Multi-select component interfaces
+interface MultiSelectFilter {
+  key: string
+  label: string
+  placeholder: string
+  selectedValues: string[]
+  searchInput: string
+  showDropdown: boolean
+  availableOptions?: string[]
+  maxSelections?: number
+  allowTextInput?: boolean
+}
+
+interface MultiSelectDropdownProps {
+  filter: MultiSelectFilter
+  onSearchChange: (value: string) => void
+  onToggleDropdown: (show: boolean) => void
+  onSelectValue: (value: string) => void
+  onRemoveValue: (value: string) => void
+}
+
+// Multi-select dropdown component
+const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
+  filter,
+  onSearchChange,
+  onToggleDropdown,
+  onSelectValue,
+  onRemoveValue
+}) => {
+  const { allowTextInput = true, maxSelections = 8 } = filter
+
+  const handleInputClick = () => {
+    if (!allowTextInput) {
+      onToggleDropdown(true)
+    }
+  }
+
+  const handleAddTextValue = () => {
+    const trimmedValue = filter.searchInput.trim()
+    if (trimmedValue &&
+        !filter.selectedValues.includes(trimmedValue) &&
+        filter.selectedValues.length < maxSelections) {
+      onSelectValue(trimmedValue)
+      onSearchChange('')
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && allowTextInput) {
+      e.preventDefault()
+      handleAddTextValue()
+    }
+  }
+
+  return (
+    <div style={{ position: 'relative', minWidth: '200px', width: '100%' }}>
+      <label style={{
+        display: 'block',
+        fontSize: '14px',
+        fontWeight: '500',
+        marginBottom: '4px',
+        color: '#374151'
+      }}>
+        {filter.label}
+      </label>
+
+      {/* Search Input */}
+      <div style={{ position: 'relative', marginBottom: filter.selectedValues.length > 0 ? '8px' : '0' }}>
+        <input
+          type="text"
+          placeholder={filter.placeholder}
+          value={filter.searchInput}
+          onChange={(e) => onSearchChange(e.target.value)}
+          onClick={handleInputClick}
+          onKeyDown={handleKeyDown}
+          style={{
+            width: '100%',
+            padding: '8px 12px',
+            border: '1px solid #d1d5db',
+            borderRadius: '6px',
+            fontSize: '14px',
+            backgroundColor: '#ffffff',
+            boxSizing: 'border-box'
+          }}
+        />
+
+        {/* Add button for text input */}
+        {allowTextInput && filter.searchInput.trim() && (
+          <button
+            onClick={handleAddTextValue}
+            style={{
+              position: 'absolute',
+              right: '4px',
+              top: '4px',
+              padding: '4px 8px',
+              background: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              fontSize: '12px',
+              cursor: 'pointer'
+            }}
+            disabled={filter.selectedValues.length >= maxSelections}
+          >
+            Add
+          </button>
+        )}
+      </div>
+
+      {/* Selected Values */}
+      {filter.selectedValues.length > 0 && (
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '6px',
+          alignItems: 'flex-start'
+        }}>
+          {filter.selectedValues.map((value) => (
+            <div
+              key={value}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                backgroundColor:
+                  filter.key === 'client' ? '#dbeafe' :
+                  filter.key === 'username' ? '#d1fae5' :
+                  filter.key === 'ip' ? '#fef3c7' :
+                  filter.key === 'protocol' ? '#e0e7ff' : '#f3f4f6',
+                color:
+                  filter.key === 'client' ? '#1e40af' :
+                  filter.key === 'username' ? '#065f46' :
+                  filter.key === 'ip' ? '#92400e' :
+                  filter.key === 'protocol' ? '#3730a3' : '#374151',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                fontWeight: '500',
+                gap: '4px',
+                maxWidth: '180px',
+                minHeight: '24px'
+              }}
+            >
+              <span style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                flex: 1
+              }}>
+                {value}
+              </span>
+              <button
+                onClick={() => onRemoveValue(value)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'inherit',
+                  cursor: 'pointer',
+                  padding: '0',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  lineHeight: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {filter.selectedValues.length >= maxSelections && (
+        <div style={{
+          fontSize: '12px',
+          color: '#ef4444',
+          marginTop: '4px'
+        }}>
+          Maximum {maxSelections} selections allowed
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface SessionWithDuration extends Session {
   duration?: string
   ip_port: string
@@ -36,34 +222,100 @@ const TIME_RANGES: TimeRange[] = [
 export const V2SessionsPage: React.FC = () => {
   const { state } = useGlobalState()
   const [sessions, setSessions] = useState<SessionWithDuration[]>([])
-  const [filteredSessions, setFilteredSessions] = useState<SessionWithDuration[]>([])
   const [chartData, setChartData] = useState<SessionChartData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>(TIME_RANGES[2])
 
-  // Filter states
-  const [openOnly, setOpenOnly] = useState(false)
-  const [ipFilter, setIpFilter] = useState('')
-  const [protocolFilter, setProtocolFilter] = useState('')
-  const [clientFilter, setClientFilter] = useState('')
-  const [usernameFilter, setUsernameFilter] = useState('')
-  const [sessionTimeRange, setSessionTimeRange] = useState('all') // all, 1h, 24h, 7d
-  const [sessionStatus, setSessionStatus] = useState('all') // all, active, ended
-  const [currentPage, setCurrentPage] = useState(0)
-  const [pageSize] = useState(20)
+  // Server-side pagination states
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(50)
+  const [totalItems, setTotalItems] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
 
-  // Fetch sessions and events data
-  const fetchSessionsData = useCallback(async () => {
+  // Server-side filter states
+  const [clientFilters, setClientFilters] = useState<string[]>([])
+  const [usernameFilters, setUsernameFilters] = useState<string[]>([])
+  const [ipFilters, setIpFilters] = useState<string[]>([])
+  const [protocolFilters, setProtocolFilters] = useState<string[]>([])
+  const [sessionTimeRange, setSessionTimeRange] = useState('24h') // 1h, 6h, 24h, 7d, 30d, all
+  const [sessionStatus, setSessionStatus] = useState('all') // all, active, ended
+
+  // Multi-select UI states
+  const [searchInputs, setSearchInputs] = useState<Record<string, string>>({})
+  const [showDropdowns, setShowDropdowns] = useState<Record<string, boolean>>({})
+
+  // Helper function to calculate timestamp for time range filters
+  const getTimeRangeFilter = (timeRange: string): string | null => {
+    const now = new Date()
+    let hoursAgo: number
+
+    switch (timeRange) {
+      case '1h': hoursAgo = 1; break
+      case '6h': hoursAgo = 6; break
+      case '24h': hoursAgo = 24; break
+      case '7d': hoursAgo = 24 * 7; break
+      case '30d': hoursAgo = 24 * 30; break
+      case 'all': return null // No time filter
+      default: return null
+    }
+
+    const timeAgo = new Date(now.getTime() - hoursAgo * 60 * 60 * 1000)
+    return timeAgo.toISOString()
+  }
+
+  // Fetch sessions with server-side pagination and filtering
+  const fetchSessions = useCallback(async (page: number = 1) => {
     try {
       setLoading(true)
       setError(null)
 
-      // Get sessions data
+      // Build server-side filters
+      const filters: Record<string, string> = {}
+
+      // Session status filter
+      if (sessionStatus === 'active') {
+        filters['end_ts'] = 'is.null'
+      } else if (sessionStatus === 'ended') {
+        filters['end_ts'] = 'not.is.null'
+      }
+
+      // Time range filter
+      const timeRangeTimestamp = getTimeRangeFilter(sessionTimeRange)
+      if (timeRangeTimestamp) {
+        filters['start_ts'] = `gte.${timeRangeTimestamp}`
+      }
+
+      // Multi-select filters
+      if (clientFilters.length > 0) {
+        filters['client'] = `in.(${clientFilters.join(',')})`
+      }
+
+      if (usernameFilters.length > 0) {
+        // Handle both exact matches and partial matches
+        const usernameConditions = usernameFilters.map(username => `username.ilike.*${username.trim()}*`).join(',')
+        filters['or'] = `(${usernameConditions})`
+      }
+
+      if (ipFilters.length > 0) {
+        const ipConditions = ipFilters.map(ip => `ip_address.ilike.*${ip.trim()}*`).join(',')
+        if (filters['or']) {
+          filters['and'] = `(${ipConditions})`
+        } else {
+          filters['or'] = `(${ipConditions})`
+        }
+      }
+
+      if (protocolFilters.length > 0) {
+        filters['protocol_version'] = `in.(${protocolFilters.join(',')})`
+      }
+
+      // Get sessions data with pagination
       const sessionsResult = await GreApiService.getSessionsPaginated({
-        limit: 10000, // Increased limit to get all sessions
-        offset: 0,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+        filters,
         sortColumn: 'start_ts',
         sortDirection: 'desc'
       })
@@ -88,6 +340,9 @@ export const V2SessionsPage: React.FC = () => {
       })
 
       setSessions(enhancedSessions)
+      setTotalItems(sessionsResult.totalCount)
+      setTotalPages(Math.ceil(sessionsResult.totalCount / pageSize))
+      setCurrentPage(page)
 
       // Fetch connection events for chart based on selected time range
       try {
@@ -148,89 +403,87 @@ export const V2SessionsPage: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [selectedTimeRange])
+  }, [clientFilters, usernameFilters, ipFilters, protocolFilters, sessionTimeRange, sessionStatus, pageSize, selectedTimeRange])
 
-  // Apply filters to sessions
+  // Multi-select handlers
+  const handleSearchInputChange = (key: string, value: string) => {
+    setSearchInputs(prev => ({ ...prev, [key]: value }))
+  }
+
+  const handleToggleDropdown = (key: string, show: boolean) => {
+    setShowDropdowns(prev => ({ ...prev, [key]: show }))
+  }
+
+  const handleSelectValue = (key: string, value: string) => {
+    switch (key) {
+      case 'client':
+        setClientFilters(prev => [...prev, value])
+        break
+      case 'username':
+        setUsernameFilters(prev => [...prev, value])
+        break
+      case 'ip':
+        setIpFilters(prev => [...prev, value])
+        break
+      case 'protocol':
+        setProtocolFilters(prev => [...prev, value])
+        break
+    }
+  }
+
+  const handleRemoveValue = (key: string, value: string) => {
+    switch (key) {
+      case 'client':
+        setClientFilters(prev => prev.filter(v => v !== value))
+        break
+      case 'username':
+        setUsernameFilters(prev => prev.filter(v => v !== value))
+        break
+      case 'ip':
+        setIpFilters(prev => prev.filter(v => v !== value))
+        break
+      case 'protocol':
+        setProtocolFilters(prev => prev.filter(v => v !== value))
+        break
+    }
+  }
+
+  // Clear filters
+  const clearFilters = () => {
+    setClientFilters([])
+    setUsernameFilters([])
+    setIpFilters([])
+    setProtocolFilters([])
+    setSessionTimeRange('24h')
+    setSessionStatus('all')
+    setSearchInputs({})
+    setShowDropdowns({})
+  }
+
+  // Load sessions on mount and when filters change
   useEffect(() => {
-    let filtered = [...sessions]
+    fetchSessions(1) // Reset to page 1 when filters change
+  }, [clientFilters, usernameFilters, ipFilters, protocolFilters, sessionTimeRange, sessionStatus])
 
-    if (openOnly) {
-      filtered = filtered.filter(session => !session.end_ts)
-    }
-
-    if (sessionStatus !== 'all') {
-      if (sessionStatus === 'active') {
-        filtered = filtered.filter(session => !session.end_ts)
-      } else if (sessionStatus === 'ended') {
-        filtered = filtered.filter(session => session.end_ts)
-      }
-    }
-
-    if (sessionTimeRange !== 'all') {
-      const now = new Date()
-      let timeLimit: Date
-
-      switch (sessionTimeRange) {
-        case '1h':
-          timeLimit = new Date(now.getTime() - 60 * 60 * 1000)
-          break
-        case '24h':
-          timeLimit = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-          break
-        case '7d':
-          timeLimit = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-          break
-        default:
-          timeLimit = new Date(0)
-      }
-
-      filtered = filtered.filter(session => new Date(session.start_ts) >= timeLimit)
-    }
-
-    if (ipFilter.trim()) {
-      const ipSearch = ipFilter.toLowerCase().trim()
-      filtered = filtered.filter(session =>
-        (session.ip_address || '').toLowerCase().includes(ipSearch)
-      )
-    }
-
-    if (protocolFilter.trim()) {
-      const protocolSearch = protocolFilter.toLowerCase().trim()
-      filtered = filtered.filter(session =>
-        (session.protocol_version || '').toLowerCase().includes(protocolSearch)
-      )
-    }
-
-    if (clientFilter.trim()) {
-      const clientSearch = clientFilter.toLowerCase().trim()
-      filtered = filtered.filter(session =>
-        session.client.toLowerCase().includes(clientSearch)
-      )
-    }
-
-    if (usernameFilter.trim()) {
-      const usernameSearch = usernameFilter.toLowerCase().trim()
-      filtered = filtered.filter(session =>
-        (session.username || '').toLowerCase().includes(usernameSearch)
-      )
-    }
-
-    setFilteredSessions(filtered)
-    setCurrentPage(0)
-  }, [sessions, openOnly, ipFilter, protocolFilter, clientFilter, usernameFilter, sessionTimeRange, sessionStatus])
-
+  // Load sessions when page changes
   useEffect(() => {
-    fetchSessionsData()
+    if (currentPage > 1) {
+      fetchSessions(currentPage)
+    }
+  }, [currentPage, fetchSessions])
 
+  // Auto-refresh
+  useEffect(() => {
     if (state.autoRefresh) {
-      const interval = setInterval(fetchSessionsData, state.refreshInterval * 1000)
+      const interval = setInterval(() => fetchSessions(currentPage), state.refreshInterval * 1000)
       return () => clearInterval(interval)
     }
-  }, [fetchSessionsData, state.autoRefresh, state.refreshInterval])
+  }, [fetchSessions, currentPage, state.autoRefresh, state.refreshInterval])
 
-  const totalPages = Math.ceil(filteredSessions.length / pageSize)
-  const startIndex = currentPage * pageSize
-  const paginatedSessions = filteredSessions.slice(startIndex, startIndex + pageSize)
+  // Manual refresh function
+  const handleManualRefresh = useCallback(() => {
+    fetchSessions(currentPage)
+  }, [fetchSessions, currentPage])
 
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleString('en-US', {
@@ -446,113 +699,168 @@ export const V2SessionsPage: React.FC = () => {
         padding: '20px',
         marginBottom: '24px'
       }}>
-        <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600' }}>
-          Session Filters
-        </h3>
-
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '16px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
           marginBottom: '16px'
         }}>
-          <input
-            type="text"
-            placeholder="Filter by client..."
-            value={clientFilter}
-            onChange={(e) => setClientFilter(e.target.value)}
+          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
+            Session Filters
+          </h3>
+          <button
+            onClick={clearFilters}
             style={{
-              padding: '8px 12px',
-              border: '1px solid #d1d5db',
+              padding: '6px 12px',
+              background: '#6b7280',
+              color: 'white',
+              border: 'none',
               borderRadius: '6px',
-              fontSize: '14px'
-            }}
-          />
-
-          <input
-            type="text"
-            placeholder="Filter by username..."
-            value={usernameFilter}
-            onChange={(e) => setUsernameFilter(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px'
-            }}
-          />
-
-          <input
-            type="text"
-            placeholder="Filter by IP..."
-            value={ipFilter}
-            onChange={(e) => setIpFilter(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px'
-            }}
-          />
-
-          <input
-            type="text"
-            placeholder="Filter by protocol..."
-            value={protocolFilter}
-            onChange={(e) => setProtocolFilter(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px'
-            }}
-          />
-
-          <select
-            value={sessionTimeRange}
-            onChange={(e) => setSessionTimeRange(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px'
+              fontSize: '14px',
+              cursor: 'pointer'
             }}
           >
-            <option value="all">All Time</option>
-            <option value="1h">Last Hour</option>
-            <option value="24h">Last 24 Hours</option>
-            <option value="7d">Last 7 Days</option>
-          </select>
-
-          <select
-            value={sessionStatus}
-            onChange={(e) => setSessionStatus(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px'
-            }}
-          >
-            <option value="all">All Sessions</option>
-            <option value="active">Active Only</option>
-            <option value="ended">Ended Only</option>
-          </select>
+            Clear Filters
+          </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
-            <input
-              type="checkbox"
-              checked={openOnly}
-              onChange={(e) => setOpenOnly(e.target.checked)}
-            />
-            Show open sessions only
+        {/* Time Range Filter */}
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px', color: '#374151' }}>
+            Time Range
           </label>
-
-          <div style={{ fontSize: '14px', color: '#6b7280' }}>
-            {filteredSessions.length} session{filteredSessions.length !== 1 ? 's' : ''} found
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {['1h', '6h', '24h', '7d', '30d', 'all'].map((range) => (
+              <button
+                key={range}
+                onClick={() => setSessionTimeRange(range)}
+                style={{
+                  padding: '6px 12px',
+                  background: sessionTimeRange === range ? '#3b82f6' : '#f3f4f6',
+                  color: sessionTimeRange === range ? 'white' : '#374151',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
+              >
+                {range === 'all' ? 'All Time' : range.toUpperCase()}
+              </button>
+            ))}
           </div>
+        </div>
+
+        {/* Session Status Filter */}
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px', color: '#374151' }}>
+            Session Status
+          </label>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {[
+              { value: 'all', label: 'All Sessions' },
+              { value: 'active', label: 'Active Only' },
+              { value: 'ended', label: 'Ended Only' }
+            ].map((status) => (
+              <button
+                key={status.value}
+                onClick={() => setSessionStatus(status.value)}
+                style={{
+                  padding: '6px 12px',
+                  background: sessionStatus === status.value ? '#3b82f6' : '#f3f4f6',
+                  color: sessionStatus === status.value ? 'white' : '#374151',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
+              >
+                {status.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Multi-select Filter Inputs */}
+        <div className="filter-dropdown" style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+          gap: '20px'
+        }}>
+          {/* Client Filter */}
+          <MultiSelectDropdown
+            filter={{
+              key: 'client',
+              label: 'Clients',
+              placeholder: 'Add client filters...',
+              selectedValues: clientFilters,
+              searchInput: searchInputs.client || '',
+              showDropdown: showDropdowns.client || false,
+              maxSelections: 8,
+              allowTextInput: true
+            }}
+            onSearchChange={(value) => handleSearchInputChange('client', value)}
+            onToggleDropdown={(show) => handleToggleDropdown('client', show)}
+            onSelectValue={(value) => handleSelectValue('client', value)}
+            onRemoveValue={(value) => handleRemoveValue('client', value)}
+          />
+
+          {/* Username Filter */}
+          <MultiSelectDropdown
+            filter={{
+              key: 'username',
+              label: 'Usernames',
+              placeholder: 'Add username filters...',
+              selectedValues: usernameFilters,
+              searchInput: searchInputs.username || '',
+              showDropdown: showDropdowns.username || false,
+              maxSelections: 8,
+              allowTextInput: true
+            }}
+            onSearchChange={(value) => handleSearchInputChange('username', value)}
+            onToggleDropdown={(show) => handleToggleDropdown('username', show)}
+            onSelectValue={(value) => handleSelectValue('username', value)}
+            onRemoveValue={(value) => handleRemoveValue('username', value)}
+          />
+
+          {/* IP Filter */}
+          <MultiSelectDropdown
+            filter={{
+              key: 'ip',
+              label: 'IP Addresses',
+              placeholder: 'Add IP filters...',
+              selectedValues: ipFilters,
+              searchInput: searchInputs.ip || '',
+              showDropdown: showDropdowns.ip || false,
+              maxSelections: 8,
+              allowTextInput: true
+            }}
+            onSearchChange={(value) => handleSearchInputChange('ip', value)}
+            onToggleDropdown={(show) => handleToggleDropdown('ip', show)}
+            onSelectValue={(value) => handleSelectValue('ip', value)}
+            onRemoveValue={(value) => handleRemoveValue('ip', value)}
+          />
+
+          {/* Protocol Filter */}
+          <MultiSelectDropdown
+            filter={{
+              key: 'protocol',
+              label: 'Protocol Versions',
+              placeholder: 'Add protocol filters...',
+              selectedValues: protocolFilters,
+              searchInput: searchInputs.protocol || '',
+              showDropdown: showDropdowns.protocol || false,
+              maxSelections: 5,
+              allowTextInput: true
+            }}
+            onSearchChange={(value) => handleSearchInputChange('protocol', value)}
+            onToggleDropdown={(show) => handleToggleDropdown('protocol', show)}
+            onSelectValue={(value) => handleSelectValue('protocol', value)}
+            onRemoveValue={(value) => handleRemoveValue('protocol', value)}
+          />
+        </div>
+
+        <div style={{ marginTop: '16px', fontSize: '14px', color: '#6b7280', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{totalItems.toLocaleString()} sessions found | Page {currentPage} of {totalPages}</span>
         </div>
       </div>
 
@@ -565,7 +873,7 @@ export const V2SessionsPage: React.FC = () => {
       }}>
         <div style={{ padding: '20px', borderBottom: '1px solid #e5e7eb' }}>
           <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
-            Session Details ({filteredSessions.length})
+            Session Details ({totalItems.toLocaleString()})
           </h2>
         </div>
 
@@ -590,14 +898,14 @@ export const V2SessionsPage: React.FC = () => {
                     Loading sessions...
                   </td>
                 </tr>
-              ) : paginatedSessions.length === 0 ? (
+              ) : sessions.length === 0 ? (
                 <tr>
                   <td colSpan={8} style={{ padding: '32px', textAlign: 'center', color: '#6b7280' }}>
                     No sessions found
                   </td>
                 </tr>
               ) : (
-                paginatedSessions.map((session) => (
+                sessions.map((session) => (
                   <tr
                     key={session.id}
                     style={{ borderBottom: '1px solid #f1f5f9' }}
@@ -643,7 +951,7 @@ export const V2SessionsPage: React.FC = () => {
         </div>
 
         {/* Pagination */}
-        {!loading && filteredSessions.length > pageSize && (
+        {!loading && totalPages > 1 && (
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
@@ -653,39 +961,53 @@ export const V2SessionsPage: React.FC = () => {
             background: '#f8f9fa'
           }}>
             <div style={{ fontSize: '14px', color: '#6b7280' }}>
-              Showing {startIndex + 1}-{Math.min(startIndex + pageSize, filteredSessions.length)} of {filteredSessions.length}
+              Showing {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, totalItems)} of {totalItems.toLocaleString()}
             </div>
 
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
-                onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-                disabled={currentPage === 0}
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
                 style={{
-                  padding: '6px 12px',
-                  background: currentPage === 0 ? '#f3f4f6' : '#fff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
+                  padding: '8px 16px',
+                  background: currentPage === 1 ? '#f3f4f6' : '#3b82f6',
+                  color: currentPage === 1 ? '#9ca3af' : '#ffffff',
+                  border: currentPage === 1 ? '1px solid #d1d5db' : '1px solid #3b82f6',
+                  borderRadius: '6px',
                   fontSize: '14px',
-                  cursor: currentPage === 0 ? 'not-allowed' : 'pointer'
+                  fontWeight: '500',
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease'
                 }}
               >
                 Previous
               </button>
 
-              <span style={{ padding: '6px 12px', fontSize: '14px', color: '#6b7280' }}>
-                Page {currentPage + 1} of {totalPages}
+              <span style={{
+                padding: '8px 16px',
+                fontSize: '14px',
+                color: '#1f2937',
+                fontWeight: '500',
+                background: '#f8f9fa',
+                borderRadius: '6px',
+                border: '1px solid #e5e7eb'
+              }}>
+                Page {currentPage} of {totalPages}
               </span>
 
               <button
-                onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
-                disabled={currentPage >= totalPages - 1}
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
                 style={{
-                  padding: '6px 12px',
-                  background: currentPage >= totalPages - 1 ? '#f3f4f6' : '#fff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
+                  padding: '8px 16px',
+                  background: currentPage === totalPages ? '#f3f4f6' : '#3b82f6',
+                  color: currentPage === totalPages ? '#9ca3af' : '#ffffff',
+                  border: currentPage === totalPages ? '1px solid #d1d5db' : '1px solid #3b82f6',
+                  borderRadius: '6px',
                   fontSize: '14px',
-                  cursor: currentPage >= totalPages - 1 ? 'not-allowed' : 'pointer'
+                  fontWeight: '500',
+                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease'
                 }}
               >
                 Next

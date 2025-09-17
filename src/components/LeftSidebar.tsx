@@ -14,6 +14,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ isOpen, onToggle }) =>
     { path: '/client-topics', label: 'Client Topics', icon: '👥' },
     { path: '/api-tables', label: 'API Tables', icon: '📑' },
     { path: '/topics', label: 'Topics', icon: '📝' },
+    { path: '/topic-management', label: 'Topic Management', icon: '🔧' },
     { path: '/acl', label: 'ACL', icon: '🔒' },
   ];
   

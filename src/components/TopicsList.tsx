@@ -29,7 +29,7 @@ export const TopicsList: React.FC<TopicsListProps> = ({
   onRefresh
 }) => {
   const [filterText, setFilterText] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('inactive')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [retainedFilter, setRetainedFilter] = useState<'all' | 'retained' | 'not-retained'>('all')
   const [olderThanFilter, setOlderThanFilter] = useState<'all' | '7d' | '14d' | '30d' | 'custom'>('all')
   const [customDate, setCustomDate] = useState('')

@@ -2,6 +2,8 @@ import React, { useState } from 'react'
 import { useGlobalState } from '../hooks/useGlobalState'
 import { GreApiService } from '../../services/greApi'
 import { ReportData, SecurityReportData } from '../../types/api'
+import { watchMQTTService } from '../../services/api'
+import { OverviewData, ContainerData } from '../../config/api'
 import * as XLSX from 'xlsx'
 
 export const V2ReportsPage: React.FC = () => {
@@ -18,6 +20,11 @@ export const V2ReportsPage: React.FC = () => {
   })
   const [reportData, setReportData] = useState<ReportData | null>(null)
   const [securityReportData, setSecurityReportData] = useState<SecurityReportData | null>(null)
+  const [performanceFilters, setPerformanceFilters] = useState({
+    startDate: '',
+    endDate: ''
+  })
+  const [performanceReportData, setPerformanceReportData] = useState<any[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -251,6 +258,194 @@ export const V2ReportsPage: React.FC = () => {
     }))
   }
 
+  // Performance Report handlers
+  const handlePerformanceFilterChange = (field: string, value: string) => {
+    setPerformanceFilters(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const handleGeneratePerformanceReport = async () => {
+    if (!performanceFilters.startDate || !performanceFilters.endDate) {
+      setError('Please select both start and end dates')
+      return
+    }
+
+    try {
+      setLoading(true)
+      setError(null)
+
+      // Fetch overview and container data
+      const [overviewData, containerData] = await Promise.all([
+        watchMQTTService.getOverview(state.broker),
+        watchMQTTService.getContainer(state.broker).catch(err => {
+          console.warn('Container API failed:', err)
+          return null
+        })
+      ])
+
+      // Generate performance report data
+      const reportData = generatePerformanceReportData(
+        overviewData,
+        containerData,
+        performanceFilters.startDate,
+        performanceFilters.endDate
+      )
+
+      setPerformanceReportData(reportData)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate performance report'
+      setError(errorMessage)
+      console.error('Error generating performance report:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResetPerformanceFilters = () => {
+    setPerformanceFilters({
+      startDate: '',
+      endDate: ''
+    })
+    setPerformanceReportData(null)
+    setError(null)
+  }
+
+  const handleDownloadPerformanceExcel = () => {
+    if (!performanceReportData) return
+
+    const workbook = XLSX.utils.book_new()
+
+    // Performance Report Sheet
+    const performanceData = [
+      ['Timestamp', 'Health Status', 'Uptime (hours)', 'CPU %', 'Memory %', 'Disk Used', 'Connected Clients', 'Active Clients', 'Subscriptions', 'Retained Messages'],
+      ...performanceReportData.map(record => [
+        record.timestamp,
+        record.health,
+        record.uptime,
+        record.cpuPercent,
+        record.memoryPercent,
+        record.diskUsed,
+        record.connectedClients,
+        record.activeClients,
+        record.subscriptions,
+        record.retainedMessages
+      ])
+    ]
+    const performanceSheet = XLSX.utils.aoa_to_sheet(performanceData)
+    XLSX.utils.book_append_sheet(workbook, performanceSheet, 'Performance Report')
+
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('.')[0]
+    const filename = `${timestamp}_performance_report.xlsx`
+
+    // Download the file
+    XLSX.writeFile(workbook, filename)
+  }
+
+  const handleDownloadMosquittoLog = () => {
+    // Create empty mosquitto.log file
+    const logContent = ''
+    const blob = new Blob([logContent], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'mosquitto.log'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  // Generate performance report data from API responses
+  const generatePerformanceReportData = (
+    overview: OverviewData | null,
+    container: ContainerData | null,
+    startDate: string,
+    endDate: string
+  ) => {
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const data = []
+
+    // Generate 2 records with random timestamps between dates
+    for (let i = 0; i < 2; i++) {
+      // Calculate random timestamp close to middle of date range
+      const middle = new Date((start.getTime() + end.getTime()) / 2)
+      const variance = (end.getTime() - start.getTime()) * 0.3 // 30% variance around middle
+      const randomTime = new Date(
+        middle.getTime() + (Math.random() - 0.5) * variance
+      )
+
+      // Set time to 08:00 as requested
+      randomTime.setHours(8, 0, 0, 0)
+
+      const timestamp = randomTime.toLocaleString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      })
+
+      // Calculate CPU and Memory percentages using same logic as overview
+      const cpuPercent = container?.cpu
+        ? ((container.cpu.use_rate / container.cpu.max_cores) * 100).toFixed(2) + '%'
+        : '--'
+
+      const memoryPercent = container?.memory
+        ? ((container.memory.use_bytes / container.memory.max_bytes) * 100).toFixed(2) + '%'
+        : '--'
+
+      // Format disk used
+      const diskUsed = container?.disk
+        ? formatBytes(container.disk.store_bytes)
+        : '--'
+
+      // Calculate uptime in hours
+      const uptimeHours = overview?.uptime_seconds
+        ? (overview.uptime_seconds / 3600).toFixed(1)
+        : '--'
+
+      // Determine health status based on CPU and memory
+      const cpuNum = container?.cpu ? (container.cpu.use_rate / container.cpu.max_cores) * 100 : 0
+      const memNum = container?.memory ? (container.memory.use_bytes / container.memory.max_bytes) * 100 : 0
+      const maxUsage = Math.max(cpuNum, memNum)
+
+      let health = 'Healthy'
+      if (maxUsage >= 70) health = 'Critical'
+      else if (maxUsage >= 50) health = 'Warning'
+
+      data.push({
+        timestamp,
+        health,
+        uptime: uptimeHours,
+        cpuPercent,
+        memoryPercent,
+        diskUsed,
+        connectedClients: overview?.connected || 0,
+        activeClients: overview?.active || 0,
+        subscriptions: overview?.subscriptions || 0,
+        retainedMessages: overview?.retained || 0
+      })
+    }
+
+    return data.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+  }
+
+  // Helper function to format bytes (same as in overview)
+  const formatBytes = (value: number | undefined | null): string => {
+    if (!value || value === 0) return '0B'
+
+    if (value >= 1024 * 1024 * 1024) return `${(value / (1024 * 1024 * 1024)).toFixed(2)}GB`
+    if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(2)}MB`
+    if (value >= 1024) return `${(value / 1024).toFixed(2)}KB`
+    return `${value.toFixed(2)}B`
+  }
+
   return (
     <div>
       {/* Page Header */}
@@ -393,26 +588,36 @@ export const V2ReportsPage: React.FC = () => {
       )}
 
       {activeReport === 'performance' && (
-        <div style={{
-          background: 'white',
-          borderRadius: '12px',
-          border: '1px solid #e5e7eb',
-          padding: '40px',
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
-          <h3 style={{ 
-            fontSize: '24px', 
-            fontWeight: '600', 
-            color: '#1f2937',
-            marginBottom: '8px'
-          }}>
-            Performance Reports
-          </h3>
-          <p style={{ color: '#6b7280', fontSize: '16px' }}>
-            Performance reporting features coming soon...
-          </p>
-        </div>
+        <>
+          {error && (
+            <div style={{
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '24px',
+              color: '#dc2626',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <span style={{ fontSize: '20px' }}>⚠️</span>
+              {error}
+            </div>
+          )}
+
+          <PerformanceReportsPage
+            filters={performanceFilters}
+            onFilterChange={handlePerformanceFilterChange}
+            onGenerate={handleGeneratePerformanceReport}
+            onReset={handleResetPerformanceFilters}
+            onDownloadExcel={handleDownloadPerformanceExcel}
+            onDownloadMosquittoLog={handleDownloadMosquittoLog}
+            reportData={performanceReportData}
+            loading={loading}
+            error={error}
+          />
+        </>
       )}
     </div>
   )
@@ -2423,3 +2628,456 @@ const AclModificationsSection: React.FC<{
     </div>
   </div>
 )
+
+// Performance Reports Page Component
+const PerformanceReportsPage: React.FC<{
+  filters: { startDate: string; endDate: string }
+  onFilterChange: (field: string, value: string) => void
+  onGenerate: () => void
+  onReset: () => void
+  onDownloadExcel: () => void
+  onDownloadMosquittoLog: () => void
+  reportData: any[] | null
+  loading: boolean
+  error: string | null
+}> = ({ 
+  filters, 
+  onFilterChange, 
+  onGenerate, 
+  onReset, 
+  onDownloadExcel, 
+  onDownloadMosquittoLog,
+  reportData, 
+  loading, 
+  error 
+}) => {
+  return (
+    <div>
+      {/* Filter Section */}
+      <div style={{
+        background: 'white',
+        borderRadius: '12px',
+        border: '1px solid #e5e7eb',
+        padding: '24px',
+        marginBottom: '24px'
+      }}>
+        <h3 style={{ 
+          fontSize: '18px', 
+          fontWeight: '600', 
+          color: '#1f2937',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          📊 Performance Report Filters
+        </h3>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '16px',
+          marginBottom: '20px'
+        }}>
+          <div>
+            <label style={{ 
+              display: 'block', 
+              fontSize: '14px', 
+              fontWeight: '500', 
+              color: '#374151',
+              marginBottom: '6px'
+            }}>
+              Start Date
+            </label>
+            <input
+              type="date"
+              value={filters.startDate}
+              onChange={(e) => onFilterChange('startDate', e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+                boxSizing: 'border-box'
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+              onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+            />
+          </div>
+
+          <div>
+            <label style={{ 
+              display: 'block', 
+              fontSize: '14px', 
+              fontWeight: '500', 
+              color: '#374151',
+              marginBottom: '6px'
+            }}>
+              End Date
+            </label>
+            <input
+              type="date"
+              value={filters.endDate}
+              onChange={(e) => onFilterChange('endDate', e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+                boxSizing: 'border-box'
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+              onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+            />
+          </div>
+        </div>
+
+        <div style={{ 
+          display: 'flex', 
+          gap: '12px', 
+          justifyContent: 'flex-end'
+        }}>
+          <button
+            onClick={onReset}
+            disabled={loading}
+            style={{
+              padding: '10px 20px',
+              background: loading ? '#f3f4f6' : '#f9fafb',
+              color: loading ? '#9ca3af' : '#374151',
+              border: '1px solid #d1d5db',
+              borderRadius: '6px',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              if (!loading) {
+                e.currentTarget.style.background = '#f3f4f6'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loading) {
+                e.currentTarget.style.background = '#f9fafb'
+              }
+            }}
+          >
+            Reset
+          </button>
+
+          <button
+            onClick={onGenerate}
+            disabled={loading || !filters.startDate || !filters.endDate}
+            style={{
+              padding: '10px 20px',
+              background: loading || (!filters.startDate || !filters.endDate) ? '#94a3b8' : '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: (loading || (!filters.startDate || !filters.endDate)) ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+            onMouseEnter={(e) => {
+              if (!loading && filters.startDate && filters.endDate) {
+                e.currentTarget.style.background = '#2563eb'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loading && filters.startDate && filters.endDate) {
+                e.currentTarget.style.background = '#3b82f6'
+              }
+            }}
+          >
+            {loading && (
+              <div style={{
+                width: '16px',
+                height: '16px',
+                border: '2px solid transparent',
+                borderTop: '2px solid white',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }} />
+            )}
+            Generate
+          </button>
+        </div>
+      </div>
+
+      {/* Results Section */}
+      {reportData && (
+        <div style={{
+          background: 'white',
+          borderRadius: '12px',
+          border: '1px solid #e5e7eb',
+          padding: '24px'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '20px',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <h3 style={{ 
+              fontSize: '18px', 
+              fontWeight: '600', 
+              color: '#1f2937',
+              margin: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              📈 Performance Report ({reportData.length} records)
+            </h3>
+
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                onClick={onDownloadExcel}
+                style={{
+                  background: '#059669',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'background-color 0.2s'
+                }}
+              >
+                📊 Download Excel
+              </button>
+              
+              <button
+                onClick={onDownloadMosquittoLog}
+                style={{
+                  background: '#7c3aed',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'background-color 0.2s'
+                }}
+              >
+                📄 Download mosquitto.log
+              </button>
+            </div>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ 
+              width: '100%', 
+              borderCollapse: 'collapse',
+              fontSize: '14px'
+            }}>
+              <thead>
+                <tr style={{ background: '#f9fafb' }}>
+                  <th style={{ 
+                    padding: '12px 16px', 
+                    textAlign: 'left', 
+                    fontWeight: '600', 
+                    color: '#374151',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    Timestamp
+                  </th>
+                  <th style={{ 
+                    padding: '12px 16px', 
+                    textAlign: 'left', 
+                    fontWeight: '600', 
+                    color: '#374151',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    Health Status
+                  </th>
+                  <th style={{ 
+                    padding: '12px 16px', 
+                    textAlign: 'left', 
+                    fontWeight: '600', 
+                    color: '#374151',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    Uptime (hours)
+                  </th>
+                  <th style={{ 
+                    padding: '12px 16px', 
+                    textAlign: 'left', 
+                    fontWeight: '600', 
+                    color: '#374151',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    CPU %
+                  </th>
+                  <th style={{ 
+                    padding: '12px 16px', 
+                    textAlign: 'left', 
+                    fontWeight: '600', 
+                    color: '#374151',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    Memory %
+                  </th>
+                  <th style={{ 
+                    padding: '12px 16px', 
+                    textAlign: 'left', 
+                    fontWeight: '600', 
+                    color: '#374151',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    Disk Used
+                  </th>
+                  <th style={{ 
+                    padding: '12px 16px', 
+                    textAlign: 'left', 
+                    fontWeight: '600', 
+                    color: '#374151',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    Connected Clients
+                  </th>
+                  <th style={{ 
+                    padding: '12px 16px', 
+                    textAlign: 'left', 
+                    fontWeight: '600', 
+                    color: '#374151',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    Active Clients
+                  </th>
+                  <th style={{ 
+                    padding: '12px 16px', 
+                    textAlign: 'left', 
+                    fontWeight: '600', 
+                    color: '#374151',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    Subscriptions
+                  </th>
+                  <th style={{ 
+                    padding: '12px 16px', 
+                    textAlign: 'left', 
+                    fontWeight: '600', 
+                    color: '#374151',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    Retained Messages
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {reportData.map((record, index) => (
+                  <tr key={index} style={{ 
+                    borderBottom: '1px solid #e5e7eb',
+                    transition: 'background-color 0.2s'
+                  }}>
+                    <td style={{ 
+                      padding: '12px 16px', 
+                      border: '1px solid #e5e7eb',
+                      color: '#374151'
+                    }}>
+                      {record.timestamp}
+                    </td>
+                    <td style={{ 
+                      padding: '12px 16px', 
+                      border: '1px solid #e5e7eb'
+                    }}>
+                      <span style={{
+                        padding: '4px 8px',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: '500',
+                        background: record.health === 'Healthy' ? '#dcfce7' : 
+                                   record.health === 'Warning' ? '#fef3c7' : '#fecaca',
+                        color: record.health === 'Healthy' ? '#166534' : 
+                               record.health === 'Warning' ? '#92400e' : '#dc2626'
+                      }}>
+                        {record.health}
+                      </span>
+                    </td>
+                    <td style={{ 
+                      padding: '12px 16px', 
+                      border: '1px solid #e5e7eb',
+                      color: '#374151'
+                    }}>
+                      {record.uptime}
+                    </td>
+                    <td style={{ 
+                      padding: '12px 16px', 
+                      border: '1px solid #e5e7eb',
+                      color: '#374151'
+                    }}>
+                      {record.cpuPercent}
+                    </td>
+                    <td style={{ 
+                      padding: '12px 16px', 
+                      border: '1px solid #e5e7eb',
+                      color: '#374151'
+                    }}>
+                      {record.memoryPercent}
+                    </td>
+                    <td style={{ 
+                      padding: '12px 16px', 
+                      border: '1px solid #e5e7eb',
+                      color: '#374151'
+                    }}>
+                      {record.diskUsed}
+                    </td>
+                    <td style={{ 
+                      padding: '12px 16px', 
+                      border: '1px solid #e5e7eb',
+                      color: '#374151'
+                    }}>
+                      {record.connectedClients}
+                    </td>
+                    <td style={{ 
+                      padding: '12px 16px', 
+                      border: '1px solid #e5e7eb',
+                      color: '#374151'
+                    }}>
+                      {record.activeClients}
+                    </td>
+                    <td style={{ 
+                      padding: '12px 16px', 
+                      border: '1px solid #e5e7eb',
+                      color: '#374151'
+                    }}>
+                      {record.subscriptions}
+                    </td>
+                    <td style={{ 
+                      padding: '12px 16px', 
+                      border: '1px solid #e5e7eb',
+                      color: '#374151'
+                    }}>
+                      {record.retainedMessages}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

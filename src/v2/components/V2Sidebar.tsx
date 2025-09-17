@@ -11,7 +11,6 @@ interface V2SidebarProps {
 
 const PAGES = [
   { id: 'overview', label: 'Overview', icon: '📊' },
-  { id: 'diagnostics', label: 'DB Health', icon: '🏥' },
   { id: 'clients', label: 'Clients', icon: '💻' },
   { id: 'sessions', label: 'Sessions', icon: '🔗' },
   { id: 'topics', label: 'Topics', icon: '📝' },
