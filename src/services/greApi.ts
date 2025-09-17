@@ -1691,6 +1691,87 @@ export class GreApiService {
         return event.action || 'Unknown action'
     }
   }
+
+  // Security Report Functions
+  static async generateAuthenticationSecurityReport(
+    startDate?: string,
+    endDate?: string
+  ): Promise<import('../types/api').AuthenticationSecurityData[]> {
+    try {
+      const filters: string[] = [`action=in.(pre_auth,not_authorized)`]
+      if (startDate) {
+        filters.push(`ts=gte.${startDate}`)
+      }
+      if (endDate) {
+        filters.push(`ts=lte.${endDate}`)
+      }
+      filters.push('order=ts.desc')
+
+      const url = `/events?${filters.join('&')}`
+      const response = await greApi.get<import('../types/api').Event[]>(url)
+
+      return response.data.map(event => ({
+        id: event.id,
+        ts: event.ts,
+        action: event.action,
+        client: event.client || 'Unknown',
+        username: event.username,
+        topic: event.topic,
+        raw: event.raw,
+        broker: event.broker
+      }))
+    } catch (error) {
+      console.error('Error generating authentication security report:', error)
+      throw new Error('Failed to generate authentication security report')
+    }
+  }
+
+  static async generateAclModificationReport(
+    startDate?: string,
+    endDate?: string
+  ): Promise<import('../types/api').AclModificationData[]> {
+    try {
+      // Get API base URL from env or fallback
+      const API_BASE_URL = (import.meta as any).env?.VITE_GRE_API_BASE_URL || 'http://localhost:3001'
+
+      const filters: string[] = [`op=in.(add_role_acl,remove_role_acl)`]
+      if (startDate) {
+        filters.push(`ts=gte.${startDate}`)
+      }
+      if (endDate) {
+        filters.push(`ts=lte.${endDate}`)
+      }
+      filters.push('order=ts.desc')
+
+      const url = `${API_BASE_URL}/dyn_audit_log?${filters.join('&')}`
+      const response = await axios.get<import('../types/api').AclModificationData[]>(url)
+
+      return response.data
+    } catch (error) {
+      console.error('Error generating ACL modification report:', error)
+      throw new Error('Failed to generate ACL modification report')
+    }
+  }
+
+  static async generateSecurityReport(
+    startDate?: string,
+    endDate?: string
+  ): Promise<import('../types/api').SecurityReportData> {
+    try {
+      const [authenticationEvents, aclModifications] = await Promise.all([
+        this.generateAuthenticationSecurityReport(startDate, endDate),
+        this.generateAclModificationReport(startDate, endDate)
+      ])
+
+      return {
+        authenticationEvents,
+        aclModifications
+      }
+    } catch (error) {
+      console.error('Error generating security report:', error)
+      throw new Error('Failed to generate security report')
+    }
+  }
 }
 
 // Helper functions

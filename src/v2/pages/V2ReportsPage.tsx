@@ -1,17 +1,23 @@
 import React, { useState } from 'react'
 import { useGlobalState } from '../hooks/useGlobalState'
 import { GreApiService } from '../../services/greApi'
-import { ReportData } from '../../types/api'
+import { ReportData, SecurityReportData } from '../../types/api'
+import * as XLSX from 'xlsx'
 
 export const V2ReportsPage: React.FC = () => {
   const { state } = useGlobalState()
   const [activeReport, setActiveReport] = useState<'client' | 'security' | 'performance'>('client')
   const [filters, setFilters] = useState({
     startDate: '',
-    endDate: '', 
+    endDate: '',
     username: ''
   })
+  const [securityFilters, setSecurityFilters] = useState({
+    startDate: '',
+    endDate: ''
+  })
   const [reportData, setReportData] = useState<ReportData | null>(null)
+  const [securityReportData, setSecurityReportData] = useState<SecurityReportData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -58,6 +64,184 @@ export const V2ReportsPage: React.FC = () => {
     })
     setReportData(null)
     setError(null)
+  }
+
+  const handleDownloadExcel = () => {
+    if (!reportData) return
+
+    const workbook = XLSX.utils.book_new()
+
+    // General Information Sheet
+    const generalInfoData = [
+      ['Field', 'Value'],
+      ['Username (og_client)', reportData.generalInfo.og_client],
+      ['Display Username', reportData.generalInfo.username],
+      ['Protocol', reportData.generalInfo.protocol],
+      ['Version', reportData.generalInfo.version],
+      ['Status', reportData.generalInfo.status],
+      ['Last Connect', new Date(reportData.generalInfo.lastConnect).toLocaleString()],
+      ['Last Disconnect', reportData.generalInfo.lastDisconnect !== 'Never'
+        ? new Date(reportData.generalInfo.lastDisconnect).toLocaleString()
+        : 'Never'],
+      ['Clean Session', reportData.generalInfo.cleanSession],
+      ['Keep Alive (sec)', reportData.generalInfo.keepAlive],
+      ['Total Sessions', reportData.generalInfo.totalSessions.toString()],
+      ['Active Sessions', reportData.generalInfo.activeSessions.toString()]
+    ]
+    const generalInfoSheet = XLSX.utils.aoa_to_sheet(generalInfoData)
+    XLSX.utils.book_append_sheet(workbook, generalInfoSheet, 'General Information')
+
+    // Sessions Sheet
+    if (reportData.sessions && reportData.sessions.length > 0) {
+      const sessionsData = [
+        ['Session ID', 'Client', 'Status', 'Start Time', 'End Time', 'Duration', 'IP:Port', 'Protocol', 'Subscriptions'],
+        ...reportData.sessions.map(session => [
+          session.session_id,
+          session.client,
+          session.status,
+          new Date(session.start_ts).toLocaleString(),
+          session.end_ts ? new Date(session.end_ts).toLocaleString() : '',
+          session.duration,
+          `${session.ip_address}:${session.port}`,
+          `v${session.protocol_version}`,
+          session.subscriptions_count
+        ])
+      ]
+      const sessionsSheet = XLSX.utils.aoa_to_sheet(sessionsData)
+      XLSX.utils.book_append_sheet(workbook, sessionsSheet, 'Sessions')
+    }
+
+    // Topic Subscriptions Sheet
+    if (reportData.topicSubscriptions && reportData.topicSubscriptions.length > 0) {
+      const subscriptionsData = [
+        ['Client', 'Topic', 'QoS', 'Status', 'Subscribed At', 'Unsubscribed At'],
+        ...reportData.topicSubscriptions.map(sub => [
+          sub.client,
+          sub.topic,
+          sub.qos,
+          sub.active ? 'Active' : 'Inactive',
+          new Date(sub.last_subscribe_ts).toLocaleString(),
+          sub.last_unsubscribe_ts ? new Date(sub.last_unsubscribe_ts).toLocaleString() : 'N/A'
+        ])
+      ]
+      const subscriptionsSheet = XLSX.utils.aoa_to_sheet(subscriptionsData)
+      XLSX.utils.book_append_sheet(workbook, subscriptionsSheet, 'Topic Subscriptions')
+    }
+
+    // Recent Activity Sheet
+    if (reportData.recentActivity && reportData.recentActivity.length > 0) {
+      const activityData = [
+        ['Time', 'Action', 'Client', 'Topic', 'Details'],
+        ...reportData.recentActivity.map(activity => [
+          new Date(activity.ts).toLocaleString(),
+          activity.action,
+          activity.client,
+          activity.topic || 'N/A',
+          activity.details
+        ])
+      ]
+      const activitySheet = XLSX.utils.aoa_to_sheet(activityData)
+      XLSX.utils.book_append_sheet(workbook, activitySheet, 'Recent Activity')
+    }
+
+    // Generate filename with timestamp and client report
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('.')[0]
+    const filename = `${timestamp}_${reportData.generalInfo.og_client}_client_report.xlsx`
+
+    // Download the file
+    XLSX.writeFile(workbook, filename)
+  }
+
+  const handleGenerateSecurityReport = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      const startDate = securityFilters.startDate ? new Date(securityFilters.startDate).toISOString() : undefined
+      const endDate = securityFilters.endDate ? new Date(securityFilters.endDate).toISOString() : undefined
+
+      const data = await GreApiService.generateSecurityReport(
+        startDate,
+        endDate
+      )
+
+      setSecurityReportData(data)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate security report'
+      setError(errorMessage)
+      console.error('Error generating security report:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSecurityFilterChange = (field: string, value: string) => {
+    setSecurityFilters(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const handleResetSecurityFilters = () => {
+    setSecurityFilters({
+      startDate: '',
+      endDate: ''
+    })
+    setSecurityReportData(null)
+    setError(null)
+  }
+
+  const handleDownloadSecurityExcel = () => {
+    if (!securityReportData) return
+
+    const workbook = XLSX.utils.book_new()
+
+    // Authentication Events Sheet
+    if (securityReportData.authenticationEvents && securityReportData.authenticationEvents.length > 0) {
+      const authData = [
+        ['Timestamp', 'Action', 'Client', 'Username', 'Topic', 'Broker', 'Details'],
+        ...securityReportData.authenticationEvents.map(event => [
+          new Date(event.ts).toLocaleString(),
+          event.action,
+          event.client,
+          event.username || 'N/A',
+          event.topic || 'N/A',
+          event.broker,
+          event.raw || 'N/A'
+        ])
+      ]
+      const authSheet = XLSX.utils.aoa_to_sheet(authData)
+      XLSX.utils.book_append_sheet(workbook, authSheet, 'Authentication Events')
+    }
+
+    // ACL Modifications Sheet
+    if (securityReportData.aclModifications && securityReportData.aclModifications.length > 0) {
+      const aclData = [
+        ['Timestamp', 'Actor', 'Operation', 'Role', 'Topic', 'ACL Type', 'Allow', 'Priority', 'Broker', 'Queue ID', 'Result'],
+        ...securityReportData.aclModifications.map(mod => [
+          new Date(mod.ts).toLocaleString(),
+          mod.actor,
+          mod.op,
+          mod.payload_json?.role || 'N/A',
+          mod.payload_json?.topic || 'N/A',
+          mod.payload_json?.acltype || 'N/A',
+          mod.payload_json?.allow !== undefined ? (mod.payload_json.allow ? 'Yes' : 'No') : 'N/A',
+          mod.payload_json?.priority || 'N/A',
+          mod.broker,
+          mod.queue_id || 'N/A',
+          JSON.stringify(mod.result_json)
+        ])
+      ]
+      const aclSheet = XLSX.utils.aoa_to_sheet(aclData)
+      XLSX.utils.book_append_sheet(workbook, aclSheet, 'ACL Modifications')
+    }
+
+    // Generate filename with timestamp and security report
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('.')[0]
+    const filename = `${timestamp}_security_report.xlsx`
+
+    // Download the file
+    XLSX.writeFile(workbook, filename)
   }
 
   const handleFilterChange = (field: string, value: string) => {
@@ -163,11 +347,12 @@ export const V2ReportsPage: React.FC = () => {
             </div>
           )}
           
-          <ClientActivityReport 
+          <ClientActivityReport
             filters={filters}
             onFilterChange={handleFilterChange}
             onGenerate={handleGenerate}
             onReset={handleReset}
+            onDownloadExcel={handleDownloadExcel}
             reportData={reportData}
             loading={loading}
             error={error}
@@ -176,26 +361,35 @@ export const V2ReportsPage: React.FC = () => {
       )}
 
       {activeReport === 'security' && (
-        <div style={{
-          background: 'white',
-          borderRadius: '12px',
-          border: '1px solid #e5e7eb',
-          padding: '40px',
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</div>
-          <h3 style={{ 
-            fontSize: '24px', 
-            fontWeight: '600', 
-            color: '#1f2937',
-            marginBottom: '8px'
-          }}>
-            Security Reports
-          </h3>
-          <p style={{ color: '#6b7280', fontSize: '16px' }}>
-            Security reporting features coming soon...
-          </p>
-        </div>
+        <>
+          {error && (
+            <div style={{
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '24px',
+              color: '#dc2626',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <span style={{ fontSize: '20px' }}>⚠️</span>
+              {error}
+            </div>
+          )}
+
+          <SecurityReportsPage
+            filters={securityFilters}
+            onFilterChange={handleSecurityFilterChange}
+            onGenerate={handleGenerateSecurityReport}
+            onReset={handleResetSecurityFilters}
+            onDownloadExcel={handleDownloadSecurityExcel}
+            reportData={securityReportData}
+            loading={loading}
+            error={error}
+          />
+        </>
       )}
 
       {activeReport === 'performance' && (
@@ -234,6 +428,7 @@ interface ClientActivityReportProps {
   onFilterChange: (field: string, value: string) => void
   onGenerate: () => void
   onReset: () => void
+  onDownloadExcel: () => void
   reportData: ReportData | null
   loading: boolean
   error: string | null
@@ -244,6 +439,7 @@ const ClientActivityReport: React.FC<ClientActivityReportProps> = ({
   onFilterChange,
   onGenerate,
   onReset,
+  onDownloadExcel,
   reportData,
   loading,
   error
@@ -416,13 +612,46 @@ const ClientActivityReport: React.FC<ClientActivityReportProps> = ({
   return (
     <div>
       {/* Filters Section */}
-      <FiltersSection 
+      <FiltersSection
         filters={filters}
         onFilterChange={onFilterChange}
         onGenerate={onGenerate}
         onReset={onReset}
         loading={loading}
       />
+
+      {/* Download Button */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'flex-end',
+        marginBottom: '24px'
+      }}>
+        <button
+          onClick={onDownloadExcel}
+          style={{
+            padding: '12px 24px',
+            background: '#10b981',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#059669'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#10b981'
+          }}
+        >
+          📥 Download Excel Report
+        </button>
+      </div>
 
       {/* General Information */}
       <GeneralInfoSection reportData={reportData} />
@@ -536,7 +765,8 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({
               borderRadius: '6px',
               fontSize: '14px',
               outline: 'none',
-              transition: 'border-color 0.2s ease'
+              transition: 'border-color 0.2s ease',
+              boxSizing: 'border-box'
             }}
             onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
             onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
@@ -564,7 +794,8 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({
               borderRadius: '6px',
               fontSize: '14px',
               outline: 'none',
-              transition: 'border-color 0.2s ease'
+              transition: 'border-color 0.2s ease',
+              boxSizing: 'border-box'
             }}
             onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
             onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
@@ -593,7 +824,8 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({
               borderRadius: '6px',
               fontSize: '14px',
               outline: 'none',
-              transition: 'border-color 0.2s ease'
+              transition: 'border-color 0.2s ease',
+              boxSizing: 'border-box'
             }}
             onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
             onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
@@ -820,7 +1052,12 @@ const SessionsSection: React.FC<{
           value={filters.status}
           onChange={(e) => onFilterChange('status', e.target.value)}
           style={{
-            width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '14px'
+            width: '100%', 
+            padding: '6px 8px', 
+            border: '1px solid #d1d5db', 
+            borderRadius: '4px', 
+            fontSize: '14px',
+            boxSizing: 'border-box'
           }}>
           <option value="">All Status</option>
           <option value="active">Active</option>
@@ -837,7 +1074,12 @@ const SessionsSection: React.FC<{
           value={filters.client}
           onChange={(e) => onFilterChange('client', e.target.value)}
           style={{
-            width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '14px'
+            width: '100%', 
+            padding: '6px 8px', 
+            border: '1px solid #d1d5db', 
+            borderRadius: '4px', 
+            fontSize: '14px',
+            boxSizing: 'border-box'
           }}
         />
       </div>
@@ -851,7 +1093,12 @@ const SessionsSection: React.FC<{
           value={filters.sessionId}
           onChange={(e) => onFilterChange('sessionId', e.target.value)}
           style={{
-            width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '14px'
+            width: '100%', 
+            padding: '6px 8px', 
+            border: '1px solid #d1d5db', 
+            borderRadius: '4px', 
+            fontSize: '14px',
+            boxSizing: 'border-box'
           }}
         />
       </div>
@@ -1007,7 +1254,12 @@ const SubscriptionsSection: React.FC<{
           value={filters.topic}
           onChange={(e) => onFilterChange('topic', e.target.value)}
           style={{
-            width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '14px'
+            width: '100%', 
+            padding: '6px 8px', 
+            border: '1px solid #d1d5db', 
+            borderRadius: '4px', 
+            fontSize: '14px',
+            boxSizing: 'border-box'
           }}
         />
       </div>
@@ -1019,7 +1271,12 @@ const SubscriptionsSection: React.FC<{
           value={filters.qos}
           onChange={(e) => onFilterChange('qos', e.target.value)}
           style={{
-            width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '14px'
+            width: '100%', 
+            padding: '6px 8px', 
+            border: '1px solid #d1d5db', 
+            borderRadius: '4px', 
+            fontSize: '14px',
+            boxSizing: 'border-box'
           }}>
           <option value="">All QoS</option>
           <option value="0">QoS 0</option>
@@ -1035,7 +1292,12 @@ const SubscriptionsSection: React.FC<{
           value={filters.status}
           onChange={(e) => onFilterChange('status', e.target.value)}
           style={{
-            width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '14px'
+            width: '100%', 
+            padding: '6px 8px', 
+            border: '1px solid #d1d5db', 
+            borderRadius: '4px', 
+            fontSize: '14px',
+            boxSizing: 'border-box'
           }}>
           <option value="">All Status</option>
           <option value="active">Active</option>
@@ -1178,7 +1440,12 @@ const ActivitySection: React.FC<{
           value={filters.action}
           onChange={(e) => onFilterChange('action', e.target.value)}
           style={{
-            width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '14px'
+            width: '100%', 
+            padding: '6px 8px', 
+            border: '1px solid #d1d5db', 
+            borderRadius: '4px', 
+            fontSize: '14px',
+            boxSizing: 'border-box'
           }}>
           <option value="">All Actions</option>
           <option value="connected">Connected</option>
@@ -1198,7 +1465,12 @@ const ActivitySection: React.FC<{
           value={filters.client}
           onChange={(e) => onFilterChange('client', e.target.value)}
           style={{
-            width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '14px'
+            width: '100%', 
+            padding: '6px 8px', 
+            border: '1px solid #d1d5db', 
+            borderRadius: '4px', 
+            fontSize: '14px',
+            boxSizing: 'border-box'
           }}
         />
       </div>
@@ -1340,3 +1612,814 @@ const getActionColor = (action: string) => {
       return { bg: '#f3f4f6', text: '#6b7280' }
   }
 }
+
+// Security Reports Page Component
+interface SecurityReportsPageProps {
+  filters: {
+    startDate: string
+    endDate: string
+  }
+  onFilterChange: (field: string, value: string) => void
+  onGenerate: () => void
+  onReset: () => void
+  onDownloadExcel: () => void
+  reportData: SecurityReportData | null
+  loading: boolean
+  error: string | null
+}
+
+const SecurityReportsPage: React.FC<SecurityReportsPageProps> = ({
+  filters,
+  onFilterChange,
+  onGenerate,
+  onReset,
+  onDownloadExcel,
+  reportData,
+  loading,
+  error
+}) => {
+  const [authPage, setAuthPage] = useState(0)
+  const [aclPage, setAclPage] = useState(0)
+  const itemsPerPage = 10
+
+  // Filters for tables
+  const [authFilters, setAuthFilters] = useState({
+    action: '',
+    client: '',
+    username: ''
+  })
+
+  const [aclFilters, setAclFilters] = useState({
+    actor: '',
+    operation: '',
+    role: ''
+  })
+
+  // Sorting state
+  const [authSort, setAuthSort] = useState({ field: '', direction: 'asc' as 'asc' | 'desc' })
+  const [aclSort, setAclSort] = useState({ field: '', direction: 'asc' as 'asc' | 'desc' })
+
+  // Helper functions for filtering and sorting
+  const filterAuthEvents = (events: any[]) => {
+    return events.filter(event => {
+      const matchesAction = !authFilters.action || event.action.toLowerCase().includes(authFilters.action.toLowerCase())
+      const matchesClient = !authFilters.client || event.client.toLowerCase().includes(authFilters.client.toLowerCase())
+      const matchesUsername = !authFilters.username || (event.username && event.username.toLowerCase().includes(authFilters.username.toLowerCase()))
+      return matchesAction && matchesClient && matchesUsername
+    })
+  }
+
+  const filterAclMods = (mods: any[]) => {
+    return mods.filter(mod => {
+      const matchesActor = !aclFilters.actor || mod.actor.toLowerCase().includes(aclFilters.actor.toLowerCase())
+      const matchesOperation = !aclFilters.operation || mod.op.toLowerCase().includes(aclFilters.operation.toLowerCase())
+      const matchesRole = !aclFilters.role || (mod.payload_json?.role && mod.payload_json.role.toLowerCase().includes(aclFilters.role.toLowerCase()))
+      return matchesActor && matchesOperation && matchesRole
+    })
+  }
+
+  const sortData = (data: any[], sortConfig: { field: string, direction: 'asc' | 'desc' }) => {
+    if (!sortConfig.field) return data
+
+    return [...data].sort((a, b) => {
+      let aVal = a[sortConfig.field]
+      let bVal = b[sortConfig.field]
+
+      // Handle nested fields for ACL modifications
+      if (sortConfig.field.includes('.')) {
+        const fields = sortConfig.field.split('.')
+        aVal = fields.reduce((obj, field) => obj?.[field], a)
+        bVal = fields.reduce((obj, field) => obj?.[field], b)
+      }
+
+      // Handle null/undefined values
+      if (aVal == null) aVal = sortConfig.direction === 'asc' ? '\uFFFF' : ''
+      if (bVal == null) bVal = sortConfig.direction === 'asc' ? '\uFFFF' : ''
+
+      // Handle different data types
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        aVal = aVal.toLowerCase()
+        bVal = bVal.toLowerCase()
+      }
+
+      if (sortConfig.direction === 'asc') {
+        return aVal < bVal ? -1 : aVal > bVal ? 1 : 0
+      } else {
+        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0
+      }
+    })
+  }
+
+  // Pagination helpers
+  const paginateArray = (array: any[], page: number) => {
+    const start = page * itemsPerPage
+    return array.slice(start, start + itemsPerPage)
+  }
+
+  const totalPages = (array: any[]) => Math.ceil(array.length / itemsPerPage)
+
+  // Process data with filters and sorting
+  const filteredAuthEvents = reportData ? sortData(filterAuthEvents(reportData.authenticationEvents), authSort) : []
+  const filteredAclMods = reportData ? sortData(filterAclMods(reportData.aclModifications), aclSort) : []
+
+  if (!reportData) {
+    return (
+      <div style={{
+        background: 'white',
+        borderRadius: '12px',
+        border: '1px solid #e5e7eb',
+        padding: '40px',
+        textAlign: 'center'
+      }}>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</div>
+        <h3 style={{
+          fontSize: '24px',
+          fontWeight: '600',
+          color: '#1f2937',
+          marginBottom: '8px'
+        }}>
+          Generate Security Report
+        </h3>
+        <p style={{ color: '#6b7280', fontSize: '16px', marginBottom: '24px' }}>
+          Select a date range to view authentication and ACL modification events
+        </p>
+
+        {/* Security Filters Section */}
+        <SecurityFiltersSection
+          filters={filters}
+          onFilterChange={onFilterChange}
+          onGenerate={onGenerate}
+          onReset={onReset}
+          loading={loading}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {/* Filters Section */}
+      <SecurityFiltersSection
+        filters={filters}
+        onFilterChange={onFilterChange}
+        onGenerate={onGenerate}
+        onReset={onReset}
+        loading={loading}
+      />
+
+      {/* Download Button */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'flex-end',
+        marginBottom: '24px'
+      }}>
+        <button
+          onClick={onDownloadExcel}
+          style={{
+            padding: '12px 24px',
+            background: '#10b981',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#059669'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#10b981'
+          }}
+        >
+          📥 Download Excel Report
+        </button>
+      </div>
+
+      {/* Authentication Events Section */}
+      <AuthenticationEventsSection
+        events={paginateArray(filteredAuthEvents, authPage)}
+        currentPage={authPage}
+        totalPages={totalPages(filteredAuthEvents)}
+        totalEvents={filteredAuthEvents.length}
+        onPageChange={setAuthPage}
+        filters={authFilters}
+        onFilterChange={setAuthFilters}
+        onSort={setAuthSort}
+        sortConfig={authSort}
+      />
+
+      {/* ACL Modifications Section */}
+      <AclModificationsSection
+        modifications={paginateArray(filteredAclMods, aclPage)}
+        currentPage={aclPage}
+        totalPages={totalPages(filteredAclMods)}
+        totalModifications={filteredAclMods.length}
+        onPageChange={setAclPage}
+        filters={aclFilters}
+        onFilterChange={setAclFilters}
+        onSort={setAclSort}
+        sortConfig={aclSort}
+      />
+    </div>
+  )
+}
+
+// Security Filters Section Component
+interface SecurityFiltersSectionProps {
+  filters: {
+    startDate: string
+    endDate: string
+  }
+  onFilterChange: (field: string, value: string) => void
+  onGenerate: () => void
+  onReset: () => void
+  loading: boolean
+}
+
+const SecurityFiltersSection: React.FC<SecurityFiltersSectionProps> = ({
+  filters,
+  onFilterChange,
+  onGenerate,
+  onReset,
+  loading
+}) => {
+  return (
+    <div style={{
+      background: 'white',
+      borderRadius: '12px',
+      border: '1px solid #e5e7eb',
+      padding: '24px',
+      marginBottom: '24px'
+    }}>
+      <h3 style={{
+        fontSize: '18px',
+        fontWeight: '600',
+        color: '#1f2937',
+        marginBottom: '20px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px'
+      }}>
+        🔍 Date Range Filter
+      </h3>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gap: '20px',
+        marginBottom: '20px'
+      }}>
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '14px',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '6px'
+          }}>
+            Start Date
+          </label>
+          <input
+            type="date"
+            value={filters.startDate}
+            onChange={(e) => onFilterChange('startDate', e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: '1px solid #d1d5db',
+              borderRadius: '6px',
+              fontSize: '14px',
+              outline: 'none',
+              transition: 'border-color 0.2s ease',
+              boxSizing: 'border-box'
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+            onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+          />
+        </div>
+
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '14px',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '6px'
+          }}>
+            End Date
+          </label>
+          <input
+            type="date"
+            value={filters.endDate}
+            onChange={(e) => onFilterChange('endDate', e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: '1px solid #d1d5db',
+              borderRadius: '6px',
+              fontSize: '14px',
+              outline: 'none',
+              transition: 'border-color 0.2s ease',
+              boxSizing: 'border-box'
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+            onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+          />
+        </div>
+      </div>
+
+      <div style={{
+        display: 'flex',
+        gap: '12px',
+        justifyContent: 'flex-end'
+      }}>
+        <button
+          onClick={onReset}
+          disabled={loading}
+          style={{
+            padding: '10px 20px',
+            background: loading ? '#f3f4f6' : '#f9fafb',
+            color: loading ? '#9ca3af' : '#374151',
+            border: '1px solid #d1d5db',
+            borderRadius: '6px',
+            fontSize: '14px',
+            fontWeight: '500',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            if (!loading) {
+              e.currentTarget.style.background = '#f3f4f6'
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!loading) {
+              e.currentTarget.style.background = '#f9fafb'
+            }
+          }}
+        >
+          Reset
+        </button>
+        <button
+          onClick={onGenerate}
+          disabled={loading}
+          style={{
+            padding: '10px 20px',
+            background: loading ? '#94a3b8' : '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            fontSize: '14px',
+            fontWeight: '500',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+          onMouseEnter={(e) => {
+            if (!loading) {
+              e.currentTarget.style.background = '#2563eb'
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!loading) {
+              e.currentTarget.style.background = '#3b82f6'
+            }
+          }}
+        >
+          {loading && (
+            <div style={{
+              width: '16px',
+              height: '16px',
+              border: '2px solid transparent',
+              borderTop: '2px solid white',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+          )}
+          Generate
+        </button>
+      </div>
+
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}
+      </style>
+    </div>
+  )
+}// Authentication Events Section
+const AuthenticationEventsSection: React.FC<{
+  events: any[]
+  currentPage: number
+  totalPages: number
+  totalEvents: number
+  onPageChange: (page: number) => void
+  filters: { action: string, client: string, username: string }
+  onFilterChange: (filters: any) => void
+  onSort: (sortConfig: { field: string, direction: 'asc' | 'desc' }) => void
+  sortConfig: { field: string, direction: 'asc' | 'desc' }
+}> = ({ events, currentPage, totalPages, totalEvents, onPageChange, filters, onFilterChange, onSort, sortConfig }) => (
+  <div style={{
+    background: 'white',
+    borderRadius: '12px',
+    border: '1px solid #e5e7eb',
+    padding: '24px',
+    marginBottom: '24px'
+  }}>
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '20px'
+    }}>
+      <h3 style={{
+        fontSize: '18px',
+        fontWeight: '600',
+        color: '#1f2937',
+        margin: 0,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px'
+      }}>
+        🔐 Authentication Events ({totalEvents})
+      </h3>
+      {totalPages > 1 && (
+        <PaginationControls
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={onPageChange}
+        />
+      )}
+    </div>
+
+    {/* Event Filters */}
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+      gap: '12px',
+      marginBottom: '16px',
+      padding: '16px',
+      background: '#f8fafc',
+      borderRadius: '8px',
+      border: '1px solid #e2e8f0'
+    }}>
+      <div>
+        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
+          Filter by Action
+        </label>
+        <select
+          value={filters.action}
+          onChange={(e) => onFilterChange({ ...filters, action: e.target.value })}
+          style={{
+            width: '100%',
+            padding: '6px 8px',
+            border: '1px solid #d1d5db',
+            borderRadius: '4px',
+            fontSize: '14px',
+            boxSizing: 'border-box'
+          }}>
+          <option value="">All Actions</option>
+          <option value="pre_auth">Pre Auth</option>
+          <option value="not_authorized">Not Authorized</option>
+        </select>
+      </div>
+      <div>
+        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
+          Filter by Client
+        </label>
+        <input
+          type="text"
+          placeholder="Enter client name..."
+          value={filters.client}
+          onChange={(e) => onFilterChange({ ...filters, client: e.target.value })}
+          style={{
+            width: '100%',
+            padding: '6px 8px',
+            border: '1px solid #d1d5db',
+            borderRadius: '4px',
+            fontSize: '14px',
+            boxSizing: 'border-box'
+          }}
+        />
+      </div>
+      <div>
+        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
+          Filter by Username
+        </label>
+        <input
+          type="text"
+          placeholder="Enter username..."
+          value={filters.username}
+          onChange={(e) => onFilterChange({ ...filters, username: e.target.value })}
+          style={{
+            width: '100%',
+            padding: '6px 8px',
+            border: '1px solid #d1d5db',
+            borderRadius: '4px',
+            fontSize: '14px',
+            boxSizing: 'border-box'
+          }}
+        />
+      </div>
+    </div>
+
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+            {[
+              { label: 'Timestamp', field: 'ts' },
+              { label: 'Action', field: 'action' },
+              { label: 'Client', field: 'client' },
+              { label: 'Username', field: 'username' },
+              { label: 'Topic', field: 'topic' },
+              { label: 'Broker', field: 'broker' },
+              { label: 'Details', field: 'raw' }
+            ].map(({ label, field }) => (
+              <th key={field} style={{
+                padding: '12px 16px',
+                textAlign: 'left',
+                fontSize: '12px',
+                fontWeight: '600',
+                textTransform: 'uppercase',
+                color: '#6b7280',
+                cursor: 'pointer',
+                userSelect: 'none',
+                position: 'relative'
+              }}
+              onClick={() => {
+                const newDirection = sortConfig.field === field && sortConfig.direction === 'asc' ? 'desc' : 'asc'
+                onSort({ field, direction: newDirection })
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#e2e8f0'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                {label} {sortConfig.field === field ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {events.map((event, index) => (
+            <tr key={event.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+              <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280' }}>
+                {new Date(event.ts).toLocaleString()}
+              </td>
+              <td style={{ padding: '16px' }}>
+                <span style={{
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  background: event.action === 'pre_auth' ? '#dbeafe' : '#fee2e2',
+                  color: event.action === 'pre_auth' ? '#1e40af' : '#dc2626'
+                }}>
+                  {event.action}
+                </span>
+              </td>
+              <td style={{ padding: '16px', fontSize: '14px', color: '#1f2937' }}>
+                {event.client}
+              </td>
+              <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280' }}>
+                {event.username || 'N/A'}
+              </td>
+              <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280' }}>
+                {event.topic || 'N/A'}
+              </td>
+              <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280' }}>
+                {event.broker}
+              </td>
+              <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {event.raw || 'N/A'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)
+
+// ACL Modifications Section
+const AclModificationsSection: React.FC<{
+  modifications: any[]
+  currentPage: number
+  totalPages: number
+  totalModifications: number
+  onPageChange: (page: number) => void
+  filters: { actor: string, operation: string, role: string }
+  onFilterChange: (filters: any) => void
+  onSort: (sortConfig: { field: string, direction: 'asc' | 'desc' }) => void
+  sortConfig: { field: string, direction: 'asc' | 'desc' }
+}> = ({ modifications, currentPage, totalPages, totalModifications, onPageChange, filters, onFilterChange, onSort, sortConfig }) => (
+  <div style={{
+    background: 'white',
+    borderRadius: '12px',
+    border: '1px solid #e5e7eb',
+    padding: '24px'
+  }}>
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '20px'
+    }}>
+      <h3 style={{
+        fontSize: '18px',
+        fontWeight: '600',
+        color: '#1f2937',
+        margin: 0,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px'
+      }}>
+        🛡️ ACL Modifications ({totalModifications})
+      </h3>
+      {totalPages > 1 && (
+        <PaginationControls
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={onPageChange}
+        />
+      )}
+    </div>
+
+    {/* ACL Filters */}
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+      gap: '12px',
+      marginBottom: '16px',
+      padding: '16px',
+      background: '#f8fafc',
+      borderRadius: '8px',
+      border: '1px solid #e2e8f0'
+    }}>
+      <div>
+        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
+          Filter by Actor
+        </label>
+        <input
+          type="text"
+          placeholder="Enter actor name..."
+          value={filters.actor}
+          onChange={(e) => onFilterChange({ ...filters, actor: e.target.value })}
+          style={{
+            width: '100%',
+            padding: '6px 8px',
+            border: '1px solid #d1d5db',
+            borderRadius: '4px',
+            fontSize: '14px',
+            boxSizing: 'border-box'
+          }}
+        />
+      </div>
+      <div>
+        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
+          Filter by Operation
+        </label>
+        <select
+          value={filters.operation}
+          onChange={(e) => onFilterChange({ ...filters, operation: e.target.value })}
+          style={{
+            width: '100%',
+            padding: '6px 8px',
+            border: '1px solid #d1d5db',
+            borderRadius: '4px',
+            fontSize: '14px',
+            boxSizing: 'border-box'
+          }}>
+          <option value="">All Operations</option>
+          <option value="add_role_acl">Add Role ACL</option>
+          <option value="remove_role_acl">Remove Role ACL</option>
+        </select>
+      </div>
+      <div>
+        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
+          Filter by Role
+        </label>
+        <input
+          type="text"
+          placeholder="Enter role..."
+          value={filters.role}
+          onChange={(e) => onFilterChange({ ...filters, role: e.target.value })}
+          style={{
+            width: '100%',
+            padding: '6px 8px',
+            border: '1px solid #d1d5db',
+            borderRadius: '4px',
+            fontSize: '14px',
+            boxSizing: 'border-box'
+          }}
+        />
+      </div>
+    </div>
+
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+            {[
+              { label: 'Timestamp', field: 'ts' },
+              { label: 'Actor', field: 'actor' },
+              { label: 'Operation', field: 'op' },
+              { label: 'Role', field: 'payload_json.role' },
+              { label: 'Topic', field: 'payload_json.topic' },
+              { label: 'ACL Type', field: 'payload_json.acltype' },
+              { label: 'Allow', field: 'payload_json.allow' },
+              { label: 'Priority', field: 'payload_json.priority' },
+              { label: 'Broker', field: 'broker' },
+              { label: 'Queue ID', field: 'queue_id' }
+            ].map(({ label, field }) => (
+              <th key={field} style={{
+                padding: '12px 16px',
+                textAlign: 'left',
+                fontSize: '12px',
+                fontWeight: '600',
+                textTransform: 'uppercase',
+                color: '#6b7280',
+                cursor: 'pointer',
+                userSelect: 'none'
+              }}
+              onClick={() => {
+                const newDirection = sortConfig.field === field && sortConfig.direction === 'asc' ? 'desc' : 'asc'
+                onSort({ field, direction: newDirection })
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#e2e8f0'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                {label} {sortConfig.field === field ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {modifications.map((mod, index) => (
+            <tr key={mod.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+              <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280' }}>
+                {new Date(mod.ts).toLocaleString()}
+              </td>
+              <td style={{ padding: '16px', fontSize: '14px', fontWeight: '500', color: '#1f2937' }}>
+                {mod.actor}
+              </td>
+              <td style={{ padding: '16px' }}>
+                <span style={{
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  background: mod.op === 'add_role_acl' ? '#dcfce7' : '#fee2e2',
+                  color: mod.op === 'add_role_acl' ? '#166534' : '#dc2626'
+                }}>
+                  {mod.op}
+                </span>
+              </td>
+              <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280' }}>
+                {mod.payload_json?.role || 'N/A'}
+              </td>
+              <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {mod.payload_json?.topic || 'N/A'}
+              </td>
+              <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280' }}>
+                {mod.payload_json?.acltype || 'N/A'}
+              </td>
+              <td style={{ padding: '16px' }}>
+                {mod.payload_json?.allow !== undefined ? (
+                  <span style={{
+                    padding: '2px 6px',
+                    borderRadius: '8px',
+                    fontSize: '10px',
+                    fontWeight: '500',
+                    background: mod.payload_json.allow ? '#dcfce7' : '#fee2e2',
+                    color: mod.payload_json.allow ? '#166534' : '#dc2626'
+                  }}>
+                    {mod.payload_json.allow ? 'Yes' : 'No'}
+                  </span>
+                ) : 'N/A'}
+              </td>
+              <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280' }}>
+                {mod.payload_json?.priority || 'N/A'}
+              </td>
+              <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280' }}>
+                {mod.broker}
+              </td>
+              <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280' }}>
+                {mod.queue_id || 'N/A'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)

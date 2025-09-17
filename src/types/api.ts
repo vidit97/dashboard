@@ -432,3 +432,37 @@ export interface ActivityReportData {
   topic: string | null;
   details: string;
 }
+
+// Security Report Types
+export interface AuthenticationSecurityData {
+  id: number;
+  ts: string;
+  action: string;
+  client: string;
+  username: string | null;
+  topic: string | null;
+  raw: string | null;
+  broker: string;
+}
+
+export interface AclModificationData {
+  id: number;
+  ts: string;
+  actor: string;
+  broker: string;
+  op: string;
+  payload_json: {
+    role?: string;
+    allow?: boolean;
+    topic?: string;
+    acltype?: string;
+    priority?: number;
+  } | null;
+  result_json: any;
+  queue_id: number | null;
+}
+
+export interface SecurityReportData {
+  authenticationEvents: AuthenticationSecurityData[];
+  aclModifications: AclModificationData[];
+}

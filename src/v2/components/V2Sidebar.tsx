@@ -20,7 +20,7 @@ const PAGES = [
   { id: 'alerts', label: 'Alerts', icon: '⚠️' },
   { id: 'acl', label: 'ACL', icon: '🔐' },
   { id: 'settings', label: 'Settings', icon: '⚙️' },
-  { id: 'diagnostics', label: 'Diagnostics', icon: '🔧' }
+  { id: 'diagnostics', label: 'DB Health', icon: '�' }
 ]
 
 export const V2Sidebar: React.FC<V2SidebarProps> = ({
