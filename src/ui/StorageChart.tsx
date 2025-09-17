@@ -18,6 +18,8 @@ interface ChartDataPoint {
   messages_stored: number
   store_messages_bytes: number
   messages_dropped_per_sec: number
+  drops_last_minute_packets: number
+  drops_last_minute_bytes: number
 }
 
 interface TimeRange {
@@ -43,7 +45,7 @@ const STORAGE_SERIES_CONFIG = [
     visible: true
   },
   {
-    key: 'store_messages_bytes', 
+    key: 'store_messages_bytes',
     name: 'Storage Bytes',
     color: '#3b82f6',
     visible: true
@@ -52,6 +54,18 @@ const STORAGE_SERIES_CONFIG = [
     key: 'messages_dropped_per_sec',
     name: 'Dropped Messages/sec',
     color: '#ef4444',
+    visible: false
+  },
+  {
+    key: 'drops_last_minute_packets',
+    name: 'Drops Last Min (Packets)',
+    color: '#f59e0b',
+    visible: false
+  },
+  {
+    key: 'drops_last_minute_bytes',
+    name: 'Drops Last Min (Bytes)',
+    color: '#8b5cf6',
     visible: false
   }
 ]
@@ -106,7 +120,9 @@ export default function StorageChart({ broker, refreshInterval = 30, autoRefresh
         time: formatTimestamp(timestamp),
         messages_stored: 0,
         store_messages_bytes: 0,
-        messages_dropped_per_sec: 0
+        messages_dropped_per_sec: 0,
+        drops_last_minute_packets: 0,
+        drops_last_minute_bytes: 0
       }
 
       // Fill in values from each series
@@ -149,10 +165,12 @@ export default function StorageChart({ broker, refreshInterval = 30, autoRefresh
       setLastFetchTime(new Date())
       
       // Check if data is all zeros and inform user
-      const hasNonZeroData = transformedData.some(point => 
-        point.messages_stored > 0 || 
-        point.store_messages_bytes > 0 || 
-        point.messages_dropped_per_sec > 0
+      const hasNonZeroData = transformedData.some(point =>
+        point.messages_stored > 0 ||
+        point.store_messages_bytes > 0 ||
+        point.messages_dropped_per_sec > 0 ||
+        point.drops_last_minute_packets > 0 ||
+        point.drops_last_minute_bytes > 0
       )
       
       if (!hasNonZeroData && transformedData.length > 0) {
@@ -216,9 +234,9 @@ export default function StorageChart({ broker, refreshInterval = 30, autoRefresh
   }
 
   const customTickFormatter = (value: number): string => {
-    // Check if storage bytes series is visible
-    const hasBytesSeries = visibleSeries['store_messages_bytes']
-    
+    // Check if any bytes series is visible
+    const hasBytesSeries = visibleSeries['store_messages_bytes'] || visibleSeries['drops_last_minute_bytes']
+
     if (hasBytesSeries && value >= 1024) {
       return formatBytes(value)
     }
@@ -233,8 +251,8 @@ export default function StorageChart({ broker, refreshInterval = 30, autoRefresh
           {payload.map((entry: any, index: number) => (
             <p key={index} style={{ color: entry.color, ...CHART_STYLES.tooltipValue }}>
               {`${entry.name}: ${
-                entry.dataKey === 'store_messages_bytes'
-                  ? `${(entry.value / 1024).toFixed(1)}KB`
+                entry.dataKey === 'store_messages_bytes' || entry.dataKey === 'drops_last_minute_bytes'
+                  ? formatBytes(entry.value)
                   : entry.value
               }`}
             </p>
