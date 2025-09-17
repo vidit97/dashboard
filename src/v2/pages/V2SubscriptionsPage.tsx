@@ -225,9 +225,7 @@ export const V2SubscriptionsPage: React.FC = () => {
                 border: '1px solid #d1d5db',
                 borderRadius: '6px',
                 fontSize: '14px',
-                minWidth: '200px',
-                background: '#fef3c7',
-                borderColor: '#f59e0b'
+                minWidth: '200px'
               }}
             />
 
@@ -381,18 +379,29 @@ export const V2SubscriptionsPage: React.FC = () => {
                   onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
                   disabled={currentPage === 0}
                   style={{
-                    padding: '6px 12px',
-                    background: currentPage === 0 ? '#f3f4f6' : '#fff',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '4px',
+                    padding: '8px 16px',
+                    background: currentPage === 0 ? '#f3f4f6' : '#3b82f6',
+                    color: currentPage === 0 ? '#9ca3af' : '#ffffff',
+                    border: currentPage === 0 ? '1px solid #d1d5db' : '1px solid #3b82f6',
+                    borderRadius: '6px',
                     fontSize: '14px',
-                    cursor: currentPage === 0 ? 'not-allowed' : 'pointer'
+                    fontWeight: '500',
+                    cursor: currentPage === 0 ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s ease'
                   }}
                 >
                   Previous
                 </button>
 
-                <span style={{ padding: '6px 12px', fontSize: '14px', color: '#6b7280' }}>
+                <span style={{
+                  padding: '8px 16px',
+                  fontSize: '14px',
+                  color: '#1f2937',
+                  fontWeight: '500',
+                  background: '#f8f9fa',
+                  borderRadius: '6px',
+                  border: '1px solid #e5e7eb'
+                }}>
                   Page {currentPage + 1} of {totalPages}
                 </span>
 
@@ -400,12 +409,15 @@ export const V2SubscriptionsPage: React.FC = () => {
                   onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
                   disabled={currentPage >= totalPages - 1}
                   style={{
-                    padding: '6px 12px',
-                    background: currentPage >= totalPages - 1 ? '#f3f4f6' : '#fff',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '4px',
+                    padding: '8px 16px',
+                    background: currentPage >= totalPages - 1 ? '#f3f4f6' : '#3b82f6',
+                    color: currentPage >= totalPages - 1 ? '#9ca3af' : '#ffffff',
+                    border: currentPage >= totalPages - 1 ? '1px solid #d1d5db' : '1px solid #3b82f6',
+                    borderRadius: '6px',
                     fontSize: '14px',
-                    cursor: currentPage >= totalPages - 1 ? 'not-allowed' : 'pointer'
+                    fontWeight: '500',
+                    cursor: currentPage >= totalPages - 1 ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s ease'
                   }}
                 >
                   Next

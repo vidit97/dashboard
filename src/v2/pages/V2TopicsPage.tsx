@@ -168,38 +168,8 @@ export const V2TopicsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Subscription Analytics Row */}
-      <div style={gridStyle}>
-        <div style={{
-          width: '100%',
-          minWidth: 0,
-          overflow: 'hidden'
-        }}>
-          <style>{`
-            .active-subscriptions-wrapper .chart-container {
-              height: ${windowWidth < 768 ? '400px' : '450px'} !important;
-              min-height: ${windowWidth < 768 ? '400px' : '450px'} !important;
-              overflow: visible !important;
-            }
-            .active-subscriptions-wrapper .chart-container .recharts-wrapper {
-              overflow: visible !important;
-            }
-          `}</style>
-          <div className="active-subscriptions-wrapper">
-            <ActiveSubscriptions refreshTrigger={refreshTrigger} />
-          </div>
-        </div>
-        <div style={{
-          width: '100%',
-          minWidth: 0,
-          overflow: 'hidden'
-        }}>
-          <SubscriptionState refreshTrigger={refreshTrigger} />
-        </div>
-      </div>
-
       {/* Topic Management Section */}
-      <div style={{ marginTop: '48px' }}>
+      <div style={{ marginBottom: '48px' }}>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -256,6 +226,36 @@ export const V2TopicsPage: React.FC = () => {
             Last updated: {lastUpdated.toLocaleString()}
           </div>
         )}
+      </div>
+
+      {/* Subscription Analytics Row */}
+      <div style={gridStyle}>
+        <div style={{
+          width: '100%',
+          minWidth: 0,
+          overflow: 'hidden'
+        }}>
+          <style>{`
+            .active-subscriptions-wrapper .chart-container {
+              height: ${windowWidth < 768 ? '400px' : '450px'} !important;
+              min-height: ${windowWidth < 768 ? '400px' : '450px'} !important;
+              overflow: visible !important;
+            }
+            .active-subscriptions-wrapper .chart-container .recharts-wrapper {
+              overflow: visible !important;
+            }
+          `}</style>
+          <div className="active-subscriptions-wrapper">
+            <ActiveSubscriptions refreshTrigger={refreshTrigger} />
+          </div>
+        </div>
+        <div style={{
+          width: '100%',
+          minWidth: 0,
+          overflow: 'hidden'
+        }}>
+          <SubscriptionState refreshTrigger={refreshTrigger} />
+        </div>
       </div>
     </div>
   )
