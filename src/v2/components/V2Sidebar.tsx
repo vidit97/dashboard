@@ -11,16 +11,16 @@ interface V2SidebarProps {
 
 const PAGES = [
   { id: 'overview', label: 'Overview', icon: '📊' },
+  { id: 'diagnostics', label: 'DB Health', icon: '🏥' },
+  { id: 'clients', label: 'Clients', icon: '💻' },
+  { id: 'sessions', label: 'Sessions', icon: '🔗' },
   { id: 'topics', label: 'Topics', icon: '📝' },
   { id: 'subscriptions', label: 'Subscriptions', icon: '👥' },
   { id: 'events', label: 'Events', icon: '📋' },
-  { id: 'sessions', label: 'Sessions', icon: '🔗' },
-  { id: 'clients', label: 'Clients', icon: '💻' },
+  { id: 'acl', label: 'ACL', icon: '🔐' },
   { id: 'reports', label: 'Reports', icon: '📊' },
   { id: 'alerts', label: 'Alerts', icon: '⚠️' },
-  { id: 'acl', label: 'ACL', icon: '🔐' },
-  { id: 'settings', label: 'Settings', icon: '⚙️' },
-  { id: 'diagnostics', label: 'DB Health', icon: '�' }
+  { id: 'settings', label: 'Settings', icon: '⚙️' }
 ]
 
 export const V2Sidebar: React.FC<V2SidebarProps> = ({
