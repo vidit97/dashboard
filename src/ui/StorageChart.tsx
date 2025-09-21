@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { watchMQTTService } from '../services/api'
 import { StorageData, API_CONFIG } from '../config/api'
 import { calculateOptimalStep } from '../utils/prometheusStep'
+import { transformTimeSeriesWithCompleteAxis, getTimeRangeParams } from '../utils/timeSeriesUtils'
 import { CHART_MARGINS, CHART_HEIGHTS, AXIS_STYLES, AXIS_DIMENSIONS, AXIS_LABELS, AXIS_DOMAIN, formatTimestamp, CHART_STYLES } from '../config/chartConfig'
 
 interface StorageChartProps {
@@ -85,59 +86,41 @@ export default function StorageChart({ broker, refreshInterval = 30, autoRefresh
   )
 
 
-  const transformStorageData = (data: StorageData): ChartDataPoint[] => {
-    if (!data.series || data.series.length === 0) {
-      console.log('No storage series data available')
-      return []
-    }
+  const transformStorageData = (data: StorageData, from: number, to: number, step: number): ChartDataPoint[] => {
+    console.log('Transforming storage data with series:', data.series?.map(s => s.name) || [])
 
-    console.log('Transforming storage data with series:', data.series.map(s => s.name))
-    
-    // Get all unique timestamps from all series
-    const timestamps = new Set<number>()
-    data.series.forEach(series => {
-      if (series.points && Array.isArray(series.points)) {
-        series.points.forEach(([timestamp]) => {
-          if (typeof timestamp === 'number') {
-            timestamps.add(timestamp)
-          }
-        })
-      }
-    })
-
-    if (timestamps.size === 0) {
-      console.log('No valid timestamps found in storage data')
-      return []
-    }
-
-    // Create data points for each timestamp
-    const sortedTimestamps = Array.from(timestamps).sort()
-    console.log(`Processing ${sortedTimestamps.length} storage timestamps`)
-    
-    return sortedTimestamps.map(timestamp => {
-      const dataPoint: ChartDataPoint = {
+    // CREATE FULL TIMELINE FIRST (like drawing the graph paper)
+    const fullTimeline: ChartDataPoint[] = []
+    for (let timestamp = from; timestamp <= to; timestamp += step) {
+      fullTimeline.push({
         timestamp,
         time: formatTimestamp(timestamp),
-        messages_stored: 0,
-        store_messages_bytes: 0,
-        messages_dropped_per_sec: 0,
-        drops_last_minute_packets: 0,
-        drops_last_minute_bytes: 0
-      }
+        messages_stored: null,
+        store_messages_bytes: null,
+        messages_dropped_per_sec: null,
+        drops_last_minute_packets: null,
+        drops_last_minute_bytes: null
+      })
+    }
 
-      // Fill in values from each series
+    console.log(`Created full storage timeline: ${fullTimeline.length} points`)
+
+    // Now fill in data where it exists
+    if (data.series && data.series.length > 0) {
       data.series.forEach(series => {
         if (series.points && Array.isArray(series.points)) {
-          const point = series.points.find(([ts]) => ts === timestamp)
-          if (point && series.name in dataPoint) {
-            const value = typeof point[1] === 'number' ? point[1] : 0
-            ;(dataPoint as any)[series.name] = value
-          }
+          series.points.forEach(([timestamp, value]) => {
+            // Find the timeline point for this timestamp
+            const timelinePoint = fullTimeline.find(point => point.timestamp === timestamp)
+            if (timelinePoint && series.name in timelinePoint) {
+              ;(timelinePoint as any)[series.name] = typeof value === 'number' ? value : null
+            }
+          })
         }
       })
+    }
 
-      return dataPoint
-    })
+    return fullTimeline
   }
 
 
@@ -145,25 +128,14 @@ export default function StorageChart({ broker, refreshInterval = 30, autoRefresh
     try {
       setLoading(true)
       setError(null)
-      
-      // Calculate time range and optimal step for API call
-      const now = Math.floor(Date.now() / 1000)
-      const from = now - (selectedTimeRange.minutes * 60)
-      const to = now
-      const step = calculateOptimalStep(selectedTimeRange.minutes)
-      
-      console.log(`Fetching storage data for broker: ${broker}, from: ${from}, to: ${to}, step: ${step}s (${selectedTimeRange.label})`)
-      
+
+      const { from, to, step } = getTimeRangeParams(selectedTimeRange.minutes)
       const data = await watchMQTTService.getStorage(broker, from, to, step)
-      console.log('Raw storage API response:', data)
-      
-      const transformedData = transformStorageData(data)
-      console.log('Transformed storage chart data:', transformedData)
-      
-      // Always show the data, even if it's all zeros (real API response)
+      const transformedData = transformStorageData(data, from, to, step)
+
       setStorageData(transformedData)
       setLastFetchTime(new Date())
-      
+
       // Check if data is all zeros and inform user
       const hasNonZeroData = transformedData.some(point =>
         point.messages_stored > 0 ||
@@ -172,11 +144,11 @@ export default function StorageChart({ broker, refreshInterval = 30, autoRefresh
         point.drops_last_minute_packets > 0 ||
         point.drops_last_minute_bytes > 0
       )
-      
+
       if (!hasNonZeroData && transformedData.length > 0) {
         console.log('Storage API returned valid data structure but all values are zero')
       }
-      
+
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to fetch storage data'
       setError(errorMsg)
@@ -186,18 +158,10 @@ export default function StorageChart({ broker, refreshInterval = 30, autoRefresh
     }
   }, [broker, selectedTimeRange])
 
-  // Manual refresh only - no auto-refresh to avoid excessive API calls
+  // Fetch data on component mount and when time range changes
   useEffect(() => {
-    // Only fetch on component mount
     fetchStorageData()
-  }, []) // Empty dependency array - only runs once
-
-  // Fetch data when time range changes
-  useEffect(() => {
-    if (selectedTimeRange !== TIME_RANGES[1]) { // Only if not initial value
-      fetchStorageData()
-    }
-  }, [selectedTimeRange, fetchStorageData])
+  }, [fetchStorageData])
 
   // Clear any existing intervals when component unmounts
   useEffect(() => {
@@ -417,6 +381,7 @@ export default function StorageChart({ broker, refreshInterval = 30, autoRefresh
                     strokeWidth={2}
                     name={series.name}
                     dot={false}
+                    connectNulls={false}
                   />
                 )
               ))}

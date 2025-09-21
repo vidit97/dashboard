@@ -31,7 +31,7 @@ export const V2OverviewPage: React.FC = () => {
       // Fetch both overview and container data in parallel
       const [overviewData, containerDataResult] = await Promise.all([
         watchMQTTService.getOverview(state.broker),
-        watchMQTTService.getContainer(state.broker).catch(err => {
+        watchMQTTService.getContainer().catch(err => {
           console.warn('Container API failed:', err)
           return null
         })
@@ -99,16 +99,14 @@ export const V2OverviewPage: React.FC = () => {
 
   // Calculate CPU usage percentage
   const getCpuUsagePercent = (): string => {
-    if (!containerData?.cpu) return '--'
-    const cpuPercent = (containerData.cpu.use_rate / containerData.cpu.max_cores) * 100
-    return `${cpuPercent.toFixed(2)}%`
+    if (!containerData?.cpu_percent) return '--'
+    return `${containerData.cpu_percent.toFixed(2)}%`
   }
 
   // Calculate memory usage percentage
   const getMemoryUsagePercent = (): string => {
-    if (!containerData?.memory) return '--'
-    const memoryPercent = (containerData.memory.use_bytes / containerData.memory.max_bytes) * 100
-    return `${memoryPercent.toFixed(2)}%`
+    if (!containerData?.memory_percent) return '--'
+    return `${containerData.memory_percent.toFixed(2)}%`
   }
 
   // Get color based on usage percentage
@@ -120,20 +118,20 @@ export const V2OverviewPage: React.FC = () => {
 
   // Get CPU usage percentage as number
   const getCpuUsageNumber = (): number => {
-    if (!containerData?.cpu) return 0
-    return (containerData.cpu.use_rate / containerData.cpu.max_cores) * 100
+    if (!containerData?.cpu_percent) return 0
+    return containerData.cpu_percent
   }
 
   // Get memory usage percentage as number
   const getMemoryUsageNumber = (): number => {
-    if (!containerData?.memory) return 0
-    return (containerData.memory.use_bytes / containerData.memory.max_bytes) * 100
+    if (!containerData?.memory_percent) return 0
+    return containerData.memory_percent
   }
 
   // Format disk store bytes
   const getDiskStoreBytes = (): string => {
-    if (!containerData?.disk) return '--'
-    return formatBytes(containerData.disk.store_bytes)
+    if (!containerData?.store_bytes) return '--'
+    return formatBytes(containerData.store_bytes)
   }
 
   // Format timestamps
@@ -264,10 +262,10 @@ export const V2OverviewPage: React.FC = () => {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
               <div>
-                <strong>Start Time:</strong> {formatTimestamp(containerData.lifecycle.start_time)}
+                <strong>Start Time:</strong> {formatTimestamp(containerData.first_seen)}
               </div>
               <div>
-                <strong>Last Seen:</strong> {formatTimestamp(containerData.lifecycle.last_seen)}
+                <strong>Last Seen:</strong> {formatTimestamp(containerData.last_seen)}
               </div>
             </div>
           </div>

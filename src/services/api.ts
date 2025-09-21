@@ -183,13 +183,12 @@ export const watchMQTTService = {
 
   // Get container data
   async getContainer(
-    broker: string = API_CONFIG.DEFAULT_BROKER,
-    id: string = 'ea24721693e3'
+    id: string = 'b04f79b40083'
   ): Promise<ContainerData> {
     try {
-      console.log(`Making container API call to: ${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CONTAINERS}`, { broker, id })
+      console.log(`Making container API call to: ${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CONTAINERS}`, { id })
       const response = await api.get(API_CONFIG.ENDPOINTS.CONTAINERS, {
-        params: { broker, id }
+        params: { id }
       })
       console.log('Container API response:', response.data)
       return response.data

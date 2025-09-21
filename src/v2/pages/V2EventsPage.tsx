@@ -45,16 +45,24 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
 }) => {
   const { allowTextInput = false, availableOptions = [], maxSelections = 9 } = filter
 
-  // For API-based filters, filter options; for text-based, allow any input
-  const filteredOptions = allowTextInput
-    ? [] // No dropdown options for text input
+  // For API-based filters with text input allowed, show filtered suggestions
+  // For API-based filters without text input, show all filtered options
+  // For pure text filters, no dropdown options
+  const filteredOptions = filter.key === 'action' && allowTextInput
+    ? availableOptions.filter(value =>
+        value.toLowerCase().includes(filter.searchInput.toLowerCase()) &&
+        !filter.selectedValues.includes(value)
+      ).slice(0, 10) // Show suggestions for actions even with text input
+    : allowTextInput
+    ? [] // No dropdown options for other text inputs
     : availableOptions.filter(value =>
         value.toLowerCase().includes(filter.searchInput.toLowerCase()) &&
         !filter.selectedValues.includes(value)
       ).slice(0, 10)
 
   const handleInputClick = () => {
-    if (!allowTextInput) {
+    // Always show dropdown if we have options to show (suggestions)
+    if (filteredOptions.length > 0 || !allowTextInput) {
       onToggleDropdown(true)
     }
   }
@@ -138,8 +146,8 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
           </button>
         )}
 
-        {/* Dropdown for API-based options */}
-        {!allowTextInput && filter.showDropdown && filteredOptions.length > 0 && (
+        {/* Dropdown for suggestions (works for both allowTextInput and regular dropdowns) */}
+        {filter.showDropdown && filteredOptions.length > 0 && (
           <div style={{
             position: 'absolute',
             top: '100%',
@@ -908,13 +916,13 @@ export const V2EventsPage: React.FC = () => {
             filter={{
               key: 'action',
               label: 'Actions',
-              placeholder: 'Search and select actions...',
+              placeholder: 'Type or select actions...',
               selectedValues: actionFilters,
               searchInput: searchInputs.action || '',
               showDropdown: showDropdowns.action || false,
               availableOptions: availableActions,
               maxSelections: 9,
-              allowTextInput: false
+              allowTextInput: true
             }}
             onSearchChange={(value) => handleSearchInputChange('action', value)}
             onToggleDropdown={(show) => handleToggleDropdown('action', show)}

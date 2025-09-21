@@ -16,6 +16,18 @@ import { CHART_STYLES } from '../config/chartConfig'
 interface SessionReliabilityProps {
   className?: string
   refreshInterval?: number
+  timeRange?: '1h' | '6h' | '24h' | '7d' | '30d' | 'all'
+}
+
+type TimePeriod = '1h' | '6h' | '24h' | '7d' | '30d' | 'all'
+
+const TIME_PERIOD_LABELS: Record<TimePeriod, string> = {
+  '1h': '1 Hour',
+  '6h': '6 Hours',
+  '24h': '24 Hours',
+  '7d': '7 Days',
+  '30d': '30 Days',
+  'all': 'All Time'
 }
 
 interface HistogramBin {
@@ -27,7 +39,7 @@ interface HistogramBin {
 
 // Mock data removed - using real API data only
 
-export default function SessionReliability({ className, refreshInterval = 180 }: SessionReliabilityProps) {
+export default function SessionReliability({ className, refreshInterval = 180, timeRange = '7d' }: SessionReliabilityProps) {
   const [sessionData, setSessionData] = useState<SessionDuration[]>([])
   const [histogramData, setHistogramData] = useState<HistogramBin[]>([])
   const [stats, setStats] = useState({
@@ -138,9 +150,9 @@ export default function SessionReliability({ className, refreshInterval = 180 }:
     try {
       setLoading(true)
       setError(null)
-      
-      console.log('Fetching session data from API...')
-      const sessions = await GreApiService.getSessionsLast7Days()
+
+      console.log(`Fetching session data from API for period: ${timeRange}`)
+      const sessions = await GreApiService.getSessionsByTimeRange(timeRange)
       console.log(`Fetched ${sessions.length} sessions`)
       setSessionData(sessions)
       processSessionData(sessions)
@@ -151,7 +163,7 @@ export default function SessionReliability({ className, refreshInterval = 180 }:
     } finally {
       setLoading(false)
     }
-  }, [processSessionData])
+  }, [processSessionData, timeRange])
 
   useEffect(() => {
     fetchSessionData()
@@ -179,7 +191,7 @@ export default function SessionReliability({ className, refreshInterval = 180 }:
           margin: 0,
           color: '#1f2937'
         }}>
-          Session Reliability (Last 7 Days)
+          Session Reliability ({TIME_PERIOD_LABELS[timeRange]})
         </h2>
 
         <button
@@ -339,7 +351,7 @@ export default function SessionReliability({ className, refreshInterval = 180 }:
           color: '#6b7280',
           fontSize: '16px'
         }}>
-          No session data available for the last 7 days
+          No session data available for {TIME_PERIOD_LABELS[timeRange].toLowerCase()}
         </div>
       )}
     </>

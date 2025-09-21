@@ -6,7 +6,8 @@ import { RolesSection } from '../../components/acl/RolesSection'
 import { ClientsSection } from '../../components/acl/ClientsSection'
 import { BackupsSection } from '../../components/acl/BackupsSection'
 import { ActivitySection } from '../../components/acl/ActivitySection'
-import { ACL_API_CONFIG } from '../../config/aclApi'
+import { ACL_API_CONFIG, OverviewData } from '../../config/aclApi'
+import { ACLApiService } from '../../services/aclApi'
 
 type ACLTab = 'overview' | 'roles' | 'clients' | 'activity' | 'backups'
 
@@ -21,6 +22,23 @@ export const V2ACLPage: React.FC = () => {
   const [lastRefresh, setLastRefresh] = useState(new Date())
   const [backupData, setBackupData] = useState<BackupData | null>(null)
   const [backupLoading, setBackupLoading] = useState(false)
+  const [overviewData, setOverviewData] = useState<OverviewData | null>(null)
+  const [overviewLoading, setOverviewLoading] = useState(false)
+
+  const fetchOverviewData = async () => {
+    setOverviewLoading(true)
+    try {
+      const result = await ACLApiService.getState()
+      if (result.ok && result.data) {
+        const processedData = ACLApiService.processStateData(result.data)
+        setOverviewData(processedData)
+      }
+    } catch (error) {
+      console.error('Failed to fetch overview data:', error)
+    } finally {
+      setOverviewLoading(false)
+    }
+  }
 
   const fetchBackupData = async () => {
     setBackupLoading(true)
@@ -56,11 +74,13 @@ export const V2ACLPage: React.FC = () => {
   }
 
   useEffect(() => {
+    fetchOverviewData()
     fetchBackupData()
   }, [state.broker])
 
   const handleRefresh = () => {
     setLastRefresh(new Date())
+    fetchOverviewData()
     fetchBackupData()
   }
 
@@ -124,7 +144,9 @@ export const V2ACLPage: React.FC = () => {
           border: '1px solid #e5e7eb',
           textAlign: 'center'
         }}>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#3b82f6' }}>12</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#3b82f6' }}>
+            {overviewLoading ? '...' : overviewData?.roleCount || 0}
+          </div>
           <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>Roles Count</div>
         </div>
         <div style={{
@@ -134,7 +156,9 @@ export const V2ACLPage: React.FC = () => {
           border: '1px solid #e5e7eb',
           textAlign: 'center'
         }}>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#10b981' }}>48</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#10b981' }}>
+            {overviewLoading ? '...' : overviewData?.clientCount || 0}
+          </div>
           <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>Clients Count</div>
         </div>
         <div style={{
