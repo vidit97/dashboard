@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { watchMQTTService } from '../services/api'
 import { TrafficData, API_CONFIG } from '../config/api'
 import { calculateOptimalStep } from '../utils/prometheusStep'
+import { transformTimeSeriesWithCompleteAxis, getTimeRangeParams } from '../utils/timeSeriesUtils'
 import { CHART_MARGINS, CHART_HEIGHTS, AXIS_STYLES, AXIS_DIMENSIONS, AXIS_LABELS, AXIS_DOMAIN, formatTimestamp, CHART_STYLES } from '../config/chartConfig'
 
 interface TrafficChartProps {
@@ -78,95 +79,84 @@ export default function TrafficChart({ broker, refreshInterval = 30, autoRefresh
   )
 
 
-  const transformTrafficData = (data: TrafficData): ChartDataPoint[] => {
-    if (!data.series || data.series.length === 0) {
-      console.log('No series data available')
-      return []
-    }
+  const transformTrafficData = (data: TrafficData, from: number, to: number, step: number): ChartDataPoint[] => {
+    console.log('Transforming data with series:', data.series?.map(s => s.name) || [])
 
-    console.log('Transforming data with series:', data.series.map(s => s.name))
-    
-    // Get all unique timestamps from all series
-    const timestamps = new Set<number>()
-    data.series.forEach(series => {
-      if (series.points && Array.isArray(series.points)) {
-        series.points.forEach(([timestamp]) => {
-          if (typeof timestamp === 'number') {
-            timestamps.add(timestamp)
-          }
-        })
-      }
-    })
-
-    if (timestamps.size === 0) {
-      console.log('No valid timestamps found')
-      return []
-    }
-
-    // Create data points for each timestamp
-    const sortedTimestamps = Array.from(timestamps).sort()
-    console.log(`Processing ${sortedTimestamps.length} timestamps`)
-    
-    return sortedTimestamps.map(timestamp => {
-      const dataPoint: ChartDataPoint = {
+    // CREATE FULL TIMELINE FIRST (like drawing the graph paper)
+    const fullTimeline: ChartDataPoint[] = []
+    for (let timestamp = from; timestamp <= to; timestamp += step) {
+      fullTimeline.push({
         timestamp,
         time: formatTimestamp(timestamp),
-        messages_sent_per_sec_1m: 0,
-        messages_received_per_sec_1m: 0,
-        bytes_sent_per_sec_1m: 0,
-        bytes_received_per_sec_1m: 0
-      }
+        messages_sent_per_sec_1m: null,
+        messages_received_per_sec_1m: null,
+        bytes_sent_per_sec_1m: null,
+        bytes_received_per_sec_1m: null
+      })
+    }
 
-      // Fill in values from each series
+    console.log(`Created full timeline: ${fullTimeline.length} points from ${formatTimestamp(from)} to ${formatTimestamp(to)}`)
+
+    // Now fill in data where it exists
+    if (data.series && data.series.length > 0) {
       data.series.forEach(series => {
         if (series.points && Array.isArray(series.points)) {
-          const point = series.points.find(([ts]) => ts === timestamp)
-          if (point && series.name in dataPoint) {
-            const value = typeof point[1] === 'number' ? point[1] : 0
-            ;(dataPoint as any)[series.name] = value
-          }
+          series.points.forEach(([timestamp, value]) => {
+            // Find the timeline point for this timestamp
+            const timelinePoint = fullTimeline.find(point => point.timestamp === timestamp)
+            if (timelinePoint && series.name in timelinePoint) {
+              ;(timelinePoint as any)[series.name] = typeof value === 'number' ? value : null
+            }
+          })
         }
       })
+    }
 
-      return dataPoint
-    })
+    console.log(`Filled in data at ${data.series?.[0]?.points?.length || 0} timestamps`)
+    return fullTimeline
   }
 
   const fetchTrafficData = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-      
-      // Calculate time range and optimal step for API call
-      const now = Math.floor(Date.now() / 1000)
-      const from = now - (selectedTimeRange.minutes * 60)
-      const to = now
-      const step = calculateOptimalStep(selectedTimeRange.minutes)
-      
-      console.log(`Fetching traffic data for broker: ${broker}, from: ${from}, to: ${to}, step: ${step}s (${selectedTimeRange.label})`)
-      
+
+      const { from, to, step } = getTimeRangeParams(selectedTimeRange.minutes)
+
+      console.log(`🔥 API CALL: ${selectedTimeRange.label}`)
+      console.log(`- Minutes: ${selectedTimeRange.minutes}`)
+      console.log(`- From: ${from} (${new Date(from * 1000).toISOString()})`)
+      console.log(`- To: ${to} (${new Date(to * 1000).toISOString()})`)
+      console.log(`- Step: ${step}s (${step/60}min)`)
+      console.log(`- Duration: ${(to - from) / 3600} hours`)
+
       const data = await watchMQTTService.getTraffic(broker, from, to, step)
-      console.log('Raw traffic API response:', data)
-      
-      const transformedData = transformTrafficData(data)
-      console.log('Transformed chart data:', transformedData)
-      
-      // Always show the data, even if it's all zeros (real API response)
+
+      console.log(`🔥 API RESPONSE:`)
+      console.log(`- Series count: ${data.series?.length || 0}`)
+      if (data.series?.[0]?.points) {
+        console.log(`- First timestamp: ${data.series[0].points[0]?.[0]} (${new Date(data.series[0].points[0]?.[0] * 1000).toISOString()})`)
+        console.log(`- Last timestamp: ${data.series[0].points[data.series[0].points.length-1]?.[0]} (${new Date(data.series[0].points[data.series[0].points.length-1]?.[0] * 1000).toISOString()})`)
+        console.log(`- Total points: ${data.series[0].points.length}`)
+      }
+
+      const transformedData = transformTrafficData(data, from, to, step)
+
       setTrafficData(transformedData)
       setLastFetchTime(new Date())
-      
+
       // Check if data is all zeros and inform user
-      const hasNonZeroData = transformedData.some(point => 
-        point.messages_sent_per_sec_1m > 0 || 
-        point.messages_received_per_sec_1m > 0 || 
-        point.bytes_sent_per_sec_1m > 0 || 
+      const hasNonZeroData = transformedData.some(point =>
+        point.messages_sent_per_sec_1m > 0 ||
+        point.messages_received_per_sec_1m > 0 ||
+        point.bytes_sent_per_sec_1m > 0 ||
         point.bytes_received_per_sec_1m > 0
       )
-      
+
       if (!hasNonZeroData && transformedData.length > 0) {
         console.log('API returned valid data structure but all values are zero')
       }
-      
+
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to fetch traffic data'
       setError(errorMsg)
@@ -176,18 +166,10 @@ export default function TrafficChart({ broker, refreshInterval = 30, autoRefresh
     }
   }, [broker, selectedTimeRange])
 
-  // Manual refresh only - no auto-refresh to avoid excessive API calls
+  // Fetch data on component mount and when time range changes
   useEffect(() => {
-    // Only fetch on component mount
     fetchTrafficData()
-  }, []) // Empty dependency array - only runs once
-
-  // Fetch data when time range changes
-  useEffect(() => {
-    if (selectedTimeRange !== TIME_RANGES[1]) { // Only if not initial value
-      fetchTrafficData()
-    }
-  }, [selectedTimeRange, fetchTrafficData])
+  }, [fetchTrafficData])
 
   // Clear any existing intervals when component unmounts
   useEffect(() => {
@@ -410,6 +392,7 @@ export default function TrafficChart({ broker, refreshInterval = 30, autoRefresh
                     strokeWidth={2}
                     name={series.name}
                     dot={false}
+                    connectNulls={false}
                   />
                 )
               ))}
