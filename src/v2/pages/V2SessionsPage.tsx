@@ -216,7 +216,7 @@ const TIME_RANGES: TimeRange[] = [
   { label: '1h', hours: 1, granularityMinutes: 5 },
   { label: '6h', hours: 6, granularityMinutes: 15 },
   { label: '24h', hours: 24, granularityMinutes: 60 },
-  { label: '7d', hours: 168, granularityMinutes: 60 }
+  { label: '7d', hours: 168, granularityMinutes: 180 } // Changed from 60 to 180 (3 hours)
 ]
 
 export const V2SessionsPage: React.FC = () => {
@@ -447,18 +447,58 @@ export const V2SessionsPage: React.FC = () => {
           const connects = intervalEvents.filter(e => e.action === 'connected').length
           const disconnects = intervalEvents.filter(e => e.action === 'disconnected').length
 
-          chartDataPoints.push({
-            time: intervalStart.toLocaleTimeString('en-US', {
+          // Format time label based on time range duration
+          let timeLabel: string
+          if (selectedTimeRange.hours <= 24) {
+            // For 1h, 6h, 24h - show only time
+            timeLabel = intervalStart.toLocaleTimeString('en-US', {
               hour: '2-digit',
               minute: '2-digit',
               hour12: false
-            }),
+            })
+          } else {
+            // For 7d - show date when day changes, otherwise show time (use UTC consistently)
+            const currentDay = intervalStart.getUTCDate()
+            const previousInterval = i > 0 ? new Date(startTime.getTime() + (i - 1) * selectedTimeRange.granularityMinutes * 60000) : null
+            const previousDay = previousInterval ? previousInterval.getUTCDate() : null
+            
+            // Show date when day changes or for the first data point
+            if (i === 0 || currentDay !== previousDay) {
+              timeLabel = intervalStart.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                timeZone: 'UTC'
+              })
+            } else {
+              // Show only time for other intervals
+              timeLabel = intervalStart.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+                timeZone: 'UTC'
+              })
+            }
+          }
+
+          chartDataPoints.push({
+            time: timeLabel,
             connects,
             disconnects,
             net: connects - disconnects
           })
+          
+          // DEBUG: Log what we're actually pushing to the chart
+          if (selectedTimeRange.hours > 24 && (i === 0 || i % 24 === 0)) {
+            console.log('📊 Chart data point added:', { i, timeLabel, connects, disconnects })
+          }
         }
 
+        console.log('📈 Final chart data (first 10 points):', chartDataPoints.slice(0, 10).map(p => ({ time: p.time, connects: p.connects })))
+        console.log('📈 Final chart data (last 10 points):', chartDataPoints.slice(-10).map(p => ({ time: p.time, connects: p.connects })))
+        
+        // DEBUG: Show all date labels in the data
+        const dateLabels = chartDataPoints.filter(p => !p.time.includes(':'))
+        console.log('📅 All date labels in chart data:', dateLabels.map(p => ({ time: p.time, index: chartDataPoints.indexOf(p) })))
         setChartData(chartDataPoints)
       } catch (chartError) {
         console.error('Error fetching chart data:', chartError)
@@ -704,7 +744,41 @@ export const V2SessionsPage: React.FC = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="time" />
+                  <XAxis 
+                    dataKey="time" 
+                    interval={0}
+                    angle={selectedTimeRange.hours > 24 ? -45 : 0}
+                    textAnchor={selectedTimeRange.hours > 24 ? 'end' : 'middle'}
+                    height={selectedTimeRange.hours > 24 ? 80 : 60}
+                    tick={(props) => {
+                      const { x, y, payload } = props
+                      const value = payload.value
+                      const isDate = !value.includes(':')
+                      
+                      if (selectedTimeRange.hours > 24) {
+                        const index = payload.index
+                        const isEvery6Hours = index % 2 === 0
+                        if (!isDate && !isEvery6Hours) return null
+                      }
+                      
+                      return (
+                        <g transform={`translate(${x},${y})`}>
+                          <text
+                            x={0}
+                            y={0}
+                            dy={16}
+                            textAnchor={selectedTimeRange.hours > 24 ? 'end' : 'middle'}
+                            fill={isDate ? '#1f2937' : '#6b7280'}
+                            fontSize={isDate ? 13 : 12}
+                            fontWeight={isDate ? 600 : 400}
+                            transform={selectedTimeRange.hours > 24 ? 'rotate(-45)' : ''}
+                          >
+                            {value}
+                          </text>
+                        </g>
+                      )
+                    }}
+                  />
                   <YAxis />
                   <Tooltip />
                   <Legend />
