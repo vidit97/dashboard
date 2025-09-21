@@ -234,11 +234,18 @@ export const V2SessionsPage: React.FC = () => {
   const [totalItems, setTotalItems] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
 
-  // Server-side filter states
+  // Server-side filter states (include)
   const [clientFilters, setClientFilters] = useState<string[]>([])
   const [usernameFilters, setUsernameFilters] = useState<string[]>([])
   const [ipFilters, setIpFilters] = useState<string[]>([])
   const [protocolFilters, setProtocolFilters] = useState<string[]>([])
+
+  // Server-side filter states (exclude)
+  const [clientExcludeFilters, setClientExcludeFilters] = useState<string[]>([])
+  const [usernameExcludeFilters, setUsernameExcludeFilters] = useState<string[]>([])
+  const [ipExcludeFilters, setIpExcludeFilters] = useState<string[]>([])
+  const [protocolExcludeFilters, setProtocolExcludeFilters] = useState<string[]>([])
+
   const [sessionTimeRange, setSessionTimeRange] = useState('24h') // 1h, 6h, 24h, 7d, 30d, all
   const [sessionStatus, setSessionStatus] = useState('all') // all, active, ended
 
@@ -287,13 +294,12 @@ export const V2SessionsPage: React.FC = () => {
         filters['start_ts'] = `gte.${timeRangeTimestamp}`
       }
 
-      // Multi-select filters
+      // Include filters (original logic)
       if (clientFilters.length > 0) {
         filters['client'] = `in.(${clientFilters.join(',')})`
       }
 
       if (usernameFilters.length > 0) {
-        // Handle both exact matches and partial matches
         const usernameConditions = usernameFilters.map(username => `username.ilike.*${username.trim()}*`).join(',')
         filters['or'] = `(${usernameConditions})`
       }
@@ -310,6 +316,70 @@ export const V2SessionsPage: React.FC = () => {
       if (protocolFilters.length > 0) {
         filters['protocol_version'] = `in.(${protocolFilters.join(',')})`
       }
+
+      // Exclude filters - must be combined with existing filters using AND logic
+      const excludeConditions: string[] = []
+
+      // Client exclude filters
+      if (clientExcludeFilters.length > 0) {
+        if (filters['client']) {
+          // Already have include filter, can't easily combine with exclude in same parameter
+          // PostgREST limitation: need to use AND logic
+          clientExcludeFilters.forEach(client => {
+            excludeConditions.push(`client.neq.${client.trim()}`)
+          })
+        } else {
+          // No include filter, can use direct not.in
+          filters['client'] = `not.in.(${clientExcludeFilters.join(',')})`
+        }
+      }
+
+      // Username exclude filters
+      if (usernameExcludeFilters.length > 0) {
+        usernameExcludeFilters.forEach(username => {
+          excludeConditions.push(`username.not.ilike.*${username.trim()}*`)
+        })
+      }
+
+      // IP exclude filters
+      if (ipExcludeFilters.length > 0) {
+        ipExcludeFilters.forEach(ip => {
+          excludeConditions.push(`ip_address.not.ilike.*${ip.trim()}*`)
+        })
+      }
+
+      // Protocol exclude filters
+      if (protocolExcludeFilters.length > 0) {
+        if (filters['protocol_version']) {
+          // Already have include filter, can't easily combine
+          protocolExcludeFilters.forEach(protocol => {
+            excludeConditions.push(`protocol_version.neq.${protocol.trim()}`)
+          })
+        } else {
+          // No include filter, can use direct not.in
+          filters['protocol_version'] = `not.in.(${protocolExcludeFilters.join(',')})`
+        }
+      }
+
+      // Add all exclude conditions to the AND clause
+      if (excludeConditions.length > 0) {
+        if (filters['and']) {
+          // Already have AND conditions, append exclude conditions
+          filters['and'] = `(${filters['and']},${excludeConditions.join(',')})`
+        } else {
+          // Create new AND clause with exclude conditions
+          filters['and'] = `(${excludeConditions.join(',')})`
+        }
+      }
+
+      // Debug: Log the filters being applied
+      console.log('🔍 Applied filters:', filters)
+      console.log('🔍 Filter states:', {
+        clientFilters,
+        clientExcludeFilters,
+        usernameFilters,
+        usernameExcludeFilters
+      })
 
       // Get sessions data with pagination
       const sessionsResult = await GreApiService.getSessionsPaginated({
@@ -403,7 +473,7 @@ export const V2SessionsPage: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [clientFilters, usernameFilters, ipFilters, protocolFilters, sessionTimeRange, sessionStatus, pageSize, selectedTimeRange])
+  }, [clientFilters, usernameFilters, ipFilters, protocolFilters, clientExcludeFilters, usernameExcludeFilters, ipExcludeFilters, protocolExcludeFilters, sessionTimeRange, sessionStatus, pageSize, selectedTimeRange])
 
   // Multi-select handlers
   const handleSearchInputChange = (key: string, value: string) => {
@@ -415,6 +485,7 @@ export const V2SessionsPage: React.FC = () => {
   }
 
   const handleSelectValue = (key: string, value: string) => {
+    console.log('🎯 handleSelectValue called:', { key, value })
     switch (key) {
       case 'client':
         setClientFilters(prev => [...prev, value])
@@ -427,6 +498,22 @@ export const V2SessionsPage: React.FC = () => {
         break
       case 'protocol':
         setProtocolFilters(prev => [...prev, value])
+        break
+      case 'exclude-client':
+        console.log('🚫 Adding client exclude:', value)
+        setClientExcludeFilters(prev => [...prev, value])
+        break
+      case 'exclude-username':
+        console.log('🚫 Adding username exclude:', value)
+        setUsernameExcludeFilters(prev => [...prev, value])
+        break
+      case 'exclude-ip':
+        console.log('🚫 Adding IP exclude:', value)
+        setIpExcludeFilters(prev => [...prev, value])
+        break
+      case 'exclude-protocol':
+        console.log('🚫 Adding protocol exclude:', value)
+        setProtocolExcludeFilters(prev => [...prev, value])
         break
     }
   }
@@ -445,6 +532,18 @@ export const V2SessionsPage: React.FC = () => {
       case 'protocol':
         setProtocolFilters(prev => prev.filter(v => v !== value))
         break
+      case 'exclude-client':
+        setClientExcludeFilters(prev => prev.filter(v => v !== value))
+        break
+      case 'exclude-username':
+        setUsernameExcludeFilters(prev => prev.filter(v => v !== value))
+        break
+      case 'exclude-ip':
+        setIpExcludeFilters(prev => prev.filter(v => v !== value))
+        break
+      case 'exclude-protocol':
+        setProtocolExcludeFilters(prev => prev.filter(v => v !== value))
+        break
     }
   }
 
@@ -454,6 +553,10 @@ export const V2SessionsPage: React.FC = () => {
     setUsernameFilters([])
     setIpFilters([])
     setProtocolFilters([])
+    setClientExcludeFilters([])
+    setUsernameExcludeFilters([])
+    setIpExcludeFilters([])
+    setProtocolExcludeFilters([])
     setSessionTimeRange('24h')
     setSessionStatus('all')
     setSearchInputs({})
@@ -463,7 +566,7 @@ export const V2SessionsPage: React.FC = () => {
   // Load sessions on mount and when filters change
   useEffect(() => {
     fetchSessions(1) // Reset to page 1 when filters change
-  }, [clientFilters, usernameFilters, ipFilters, protocolFilters, sessionTimeRange, sessionStatus, selectedTimeRange])
+  }, [clientFilters, usernameFilters, ipFilters, protocolFilters, clientExcludeFilters, usernameExcludeFilters, ipExcludeFilters, protocolExcludeFilters, sessionTimeRange, sessionStatus, selectedTimeRange])
 
   // Load sessions when page changes
   useEffect(() => {
@@ -857,6 +960,98 @@ export const V2SessionsPage: React.FC = () => {
             onSelectValue={(value) => handleSelectValue('protocol', value)}
             onRemoveValue={(value) => handleRemoveValue('protocol', value)}
           />
+        </div>
+
+        {/* Exclude Filters Section */}
+        <div style={{ marginTop: '24px' }}>
+          <h4 style={{
+            margin: '0 0 16px 0',
+            fontSize: '16px',
+            fontWeight: '600',
+            color: '#374151',
+            borderBottom: '1px solid #e5e7eb',
+            paddingBottom: '8px'
+          }}>
+            🚫 Exclude Filters (Remove from results)
+          </h4>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+            gap: '20px'
+          }}>
+            {/* Exclude Client Filter */}
+            <MultiSelectDropdown
+              filter={{
+                key: 'exclude-client',
+                label: 'Exclude Clients',
+                placeholder: 'Add clients to exclude...',
+                selectedValues: clientExcludeFilters,
+                searchInput: searchInputs['exclude-client'] || '',
+                showDropdown: showDropdowns['exclude-client'] || false,
+                maxSelections: 8,
+                allowTextInput: true
+              }}
+              onSearchChange={(value) => handleSearchInputChange('exclude-client', value)}
+              onToggleDropdown={(show) => handleToggleDropdown('exclude-client', show)}
+              onSelectValue={(value) => handleSelectValue('exclude-client', value)}
+              onRemoveValue={(value) => handleRemoveValue('exclude-client', value)}
+            />
+
+            {/* Exclude Username Filter */}
+            <MultiSelectDropdown
+              filter={{
+                key: 'exclude-username',
+                label: 'Exclude Usernames',
+                placeholder: 'Add usernames to exclude...',
+                selectedValues: usernameExcludeFilters,
+                searchInput: searchInputs['exclude-username'] || '',
+                showDropdown: showDropdowns['exclude-username'] || false,
+                maxSelections: 8,
+                allowTextInput: true
+              }}
+              onSearchChange={(value) => handleSearchInputChange('exclude-username', value)}
+              onToggleDropdown={(show) => handleToggleDropdown('exclude-username', show)}
+              onSelectValue={(value) => handleSelectValue('exclude-username', value)}
+              onRemoveValue={(value) => handleRemoveValue('exclude-username', value)}
+            />
+
+            {/* Exclude IP Filter */}
+            <MultiSelectDropdown
+              filter={{
+                key: 'exclude-ip',
+                label: 'Exclude IP Addresses',
+                placeholder: 'Add IPs to exclude...',
+                selectedValues: ipExcludeFilters,
+                searchInput: searchInputs['exclude-ip'] || '',
+                showDropdown: showDropdowns['exclude-ip'] || false,
+                maxSelections: 8,
+                allowTextInput: true
+              }}
+              onSearchChange={(value) => handleSearchInputChange('exclude-ip', value)}
+              onToggleDropdown={(show) => handleToggleDropdown('exclude-ip', show)}
+              onSelectValue={(value) => handleSelectValue('exclude-ip', value)}
+              onRemoveValue={(value) => handleRemoveValue('exclude-ip', value)}
+            />
+
+            {/* Exclude Protocol Filter */}
+            <MultiSelectDropdown
+              filter={{
+                key: 'exclude-protocol',
+                label: 'Exclude Protocol Versions',
+                placeholder: 'Add protocols to exclude...',
+                selectedValues: protocolExcludeFilters,
+                searchInput: searchInputs['exclude-protocol'] || '',
+                showDropdown: showDropdowns['exclude-protocol'] || false,
+                maxSelections: 5,
+                allowTextInput: true
+              }}
+              onSearchChange={(value) => handleSearchInputChange('exclude-protocol', value)}
+              onToggleDropdown={(show) => handleToggleDropdown('exclude-protocol', show)}
+              onSelectValue={(value) => handleSelectValue('exclude-protocol', value)}
+              onRemoveValue={(value) => handleRemoveValue('exclude-protocol', value)}
+            />
+          </div>
         </div>
 
         <div style={{ marginTop: '16px', fontSize: '14px', color: '#6b7280', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
