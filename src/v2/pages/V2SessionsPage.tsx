@@ -463,7 +463,7 @@ export const V2SessionsPage: React.FC = () => {
   // Load sessions on mount and when filters change
   useEffect(() => {
     fetchSessions(1) // Reset to page 1 when filters change
-  }, [clientFilters, usernameFilters, ipFilters, protocolFilters, sessionTimeRange, sessionStatus])
+  }, [clientFilters, usernameFilters, ipFilters, protocolFilters, sessionTimeRange, sessionStatus, selectedTimeRange])
 
   // Load sessions when page changes
   useEffect(() => {
@@ -534,7 +534,7 @@ export const V2SessionsPage: React.FC = () => {
             {error}
           </div>
           <button
-            onClick={fetchSessionsData}
+            onClick={handleManualRefresh}
             style={{
               marginTop: '12px',
               padding: '8px 16px',
