@@ -275,7 +275,9 @@ export const V2EventsPage: React.FC = () => {
   const [timeRangeFilter, setTimeRangeFilter] = useState<string>('24h')
 
   // Available options for dropdowns
-  const [availableActions, setAvailableActions] = useState<string[]>([])
+  const [availableActions, setAvailableActions] = useState<string[]>([
+    'connected', 'disconnected', 'not_authorized', 'pre_auth', 'publish', 'subscribe', 'unsubscribe', 'watch'
+  ])
   const [availableQoSOptions] = useState<string[]>(['0', '1', '2'])
   const [actionsLastFetched, setActionsLastFetched] = useState<Date | null>(null)
 
@@ -361,20 +363,23 @@ export const V2EventsPage: React.FC = () => {
         throw new Error('No actions returned from API')
       }
 
-      setAvailableActions(actions.sort())
+      // Ensure core actions are always included
+      const coreActions = ['connected', 'disconnected', 'not_authorized', 'pre_auth', 'publish', 'subscribe', 'unsubscribe', 'watch']
+      const allActions = [...new Set([...coreActions, ...actions])].sort()
+      setAvailableActions(allActions)
       setActionsLastFetched(now)
-      console.log(`Successfully loaded ${actions.length} unique actions from API`)
+      console.log(`Successfully loaded ${allActions.length} unique actions from API (including ${coreActions.length} core actions)`)
 
     } catch (err) {
       console.error('Error fetching available actions:', err)
       // Enhanced fallback with comprehensive MQTT actions based on MQTT protocol
       const fallbackActions = [
-        'connected', 'disconnected', 'publish', 'subscribe', 'unsubscribe',
+        'connected', 'disconnected', 'not_authorized', 'pre_auth', 'publish', 'subscribe', 'unsubscribe', 'watch',
         'connack', 'disconnect', 'pingreq', 'pingresp', 'puback', 'pubcomp',
         'pubrec', 'pubrel', 'suback', 'unsuback', 'auth', 'error', 'timeout',
         'session_present', 'will_message', 'retain_available', 'maximum_qos',
         'keep_alive', 'client_identifier_not_valid', 'bad_username_or_password',
-        'not_authorized', 'server_unavailable', 'server_busy', 'banned'
+        'server_unavailable', 'server_busy', 'banned'
       ]
       setAvailableActions(fallbackActions.sort())
       setActionsLastFetched(now)
@@ -527,8 +532,9 @@ export const V2EventsPage: React.FC = () => {
 
         if (unknownActions.length > 0 && availableActions.length > 0) {
           console.log('Discovered new actions in data, refreshing actions list:', unknownActions)
-          // Add new actions immediately to avoid delay
-          setAvailableActions(prev => [...prev, ...unknownActions].sort())
+          // Add new actions immediately to avoid delay, ensuring core actions are preserved
+          const coreActions = ['connected', 'disconnected', 'not_authorized', 'pre_auth', 'publish', 'subscribe', 'unsubscribe', 'watch']
+          setAvailableActions(prev => [...new Set([...coreActions, ...prev, ...unknownActions])].sort())
           // Also trigger a full refresh to catch any other new actions
           fetchAvailableActions(true)
         }
