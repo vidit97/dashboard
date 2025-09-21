@@ -10,6 +10,7 @@ interface HealthMetric {
   status: 'ok' | 'warning' | 'error'
   formattedValue: string
   description: string
+  category: 'postgresql' | 'prometheus'
 }
 
 export const V2AlertsPage: React.FC = () => {
@@ -83,7 +84,8 @@ export const V2AlertsPage: React.FC = () => {
         value: healthData.pg_up,
         status: getMetricStatus(healthData.pg_up, 'pg_up'),
         formattedValue: formatMetricValue(healthData.pg_up, 'pg_up'),
-        description: getMetricDescription('pg_up')
+        description: getMetricDescription('pg_up'),
+        category: 'postgresql'
       },
       {
         key: 'pg_exporter_last_scrape_success',
@@ -91,7 +93,8 @@ export const V2AlertsPage: React.FC = () => {
         value: healthData.pg_exporter_last_scrape_success,
         status: getMetricStatus(healthData.pg_exporter_last_scrape_success, 'pg_exporter_last_scrape_success'),
         formattedValue: formatMetricValue(healthData.pg_exporter_last_scrape_success, 'pg_exporter_last_scrape_success'),
-        description: getMetricDescription('pg_exporter_last_scrape_success')
+        description: getMetricDescription('pg_exporter_last_scrape_success'),
+        category: 'postgresql'
       },
       {
         key: 'prom_ready',
@@ -99,7 +102,8 @@ export const V2AlertsPage: React.FC = () => {
         value: healthData.prom_ready,
         status: getMetricStatus(healthData.prom_ready, 'prom_ready'),
         formattedValue: formatMetricValue(healthData.prom_ready, 'prom_ready'),
-        description: getMetricDescription('prom_ready')
+        description: getMetricDescription('prom_ready'),
+        category: 'prometheus'
       },
       {
         key: 'prom_targets_up',
@@ -107,7 +111,8 @@ export const V2AlertsPage: React.FC = () => {
         value: healthData.prom_targets_up,
         status: getMetricStatus(healthData.prom_targets_up, 'prom_targets_up'),
         formattedValue: `${healthData.prom_targets_up}/${healthData.prom_targets_total}`,
-        description: getMetricDescription('prom_targets_up')
+        description: getMetricDescription('prom_targets_up'),
+        category: 'prometheus'
       },
       {
         key: 'watchmqtt_up_targets',
@@ -115,7 +120,8 @@ export const V2AlertsPage: React.FC = () => {
         value: healthData.watchmqtt_up_targets,
         status: getMetricStatus(healthData.watchmqtt_up_targets, 'watchmqtt_up_targets'),
         formattedValue: healthData.watchmqtt_up_targets.toString(),
-        description: getMetricDescription('watchmqtt_up_targets')
+        description: getMetricDescription('watchmqtt_up_targets'),
+        category: 'prometheus'
       },
       {
         key: 'pg_exporter_last_scrape_duration_seconds',
@@ -123,7 +129,8 @@ export const V2AlertsPage: React.FC = () => {
         value: healthData.pg_exporter_last_scrape_duration_seconds,
         status: getMetricStatus(healthData.pg_exporter_last_scrape_duration_seconds, 'pg_exporter_last_scrape_duration_seconds'),
         formattedValue: formatMetricValue(healthData.pg_exporter_last_scrape_duration_seconds, 'pg_exporter_last_scrape_duration_seconds'),
-        description: getMetricDescription('pg_exporter_last_scrape_duration_seconds')
+        description: getMetricDescription('pg_exporter_last_scrape_duration_seconds'),
+        category: 'postgresql'
       },
       {
         key: 'pg_locks_total',
@@ -131,7 +138,8 @@ export const V2AlertsPage: React.FC = () => {
         value: healthData.pg_locks_total,
         status: getMetricStatus(healthData.pg_locks_total, 'pg_locks_total'),
         formattedValue: healthData.pg_locks_total.toString(),
-        description: getMetricDescription('pg_locks_total')
+        description: getMetricDescription('pg_locks_total'),
+        category: 'postgresql'
       },
       {
         key: 'pg_database_size_bytes',
@@ -139,7 +147,8 @@ export const V2AlertsPage: React.FC = () => {
         value: healthData.pg_database_size_bytes,
         status: 'ok', // Size is informational
         formattedValue: formatMetricValue(healthData.pg_database_size_bytes, 'pg_database_size_bytes'),
-        description: getMetricDescription('pg_database_size_bytes')
+        description: getMetricDescription('pg_database_size_bytes'),
+        category: 'postgresql'
       }
     ]
 
@@ -152,12 +161,24 @@ export const V2AlertsPage: React.FC = () => {
         severity: metric.status === 'error' ? 'critical' : 'warning',
         since: lastUpdated,
         description: `${metric.description} (Current: ${metric.formattedValue})`,
-        status: 'active'
+        status: 'active',
+        category: metric.category
       }))
   }
 
   const overallStatus = healthData ? getOverallStatus(healthMetrics) : 'warning'
   const healthAlertsCount = healthAlerts.length
+
+  // Separate metrics by category
+  const postgresMetrics = healthMetrics.filter(m => m.category === 'postgresql')
+  const prometheusMetrics = healthMetrics.filter(m => m.category === 'prometheus')
+
+  const postgresOverallStatus = postgresMetrics.length > 0 ? getOverallStatus(postgresMetrics) : 'warning'
+  const prometheusOverallStatus = prometheusMetrics.length > 0 ? getOverallStatus(prometheusMetrics) : 'warning'
+
+  // Separate alerts by category
+  const postgresAlerts = healthAlerts.filter(alert => alert.category === 'postgresql')
+  const prometheusAlerts = healthAlerts.filter(alert => alert.category === 'prometheus')
 
   return (
     <div style={{
@@ -186,11 +207,12 @@ export const V2AlertsPage: React.FC = () => {
         </p>
       </div>
 
-      {/* DB Health Status Tiles */}
+      {/* Overall Status Tiles */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-        gap: '16px'
+        gap: '16px',
+        marginBottom: '24px'
       }}>
         <div style={{
           background: 'white',
@@ -226,71 +248,6 @@ export const V2AlertsPage: React.FC = () => {
           textAlign: 'center'
         }}>
           <div style={{ fontSize: '24px', fontWeight: '700', color: '#10b981' }}>
-            {healthData ? `${healthData.prom_targets_up}/${healthData.prom_targets_total}` : '0/0'}
-          </div>
-          <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>Prom Targets</div>
-        </div>
-
-        <div style={{
-          background: 'white',
-          padding: '20px',
-          borderRadius: '12px',
-          border: '1px solid #e5e7eb',
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#3b82f6' }}>
-            {healthData ? healthData.watchmqtt_up_targets : 0}
-          </div>
-          <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>MQTT Targets</div>
-        </div>
-
-        <div style={{
-          background: 'white',
-          padding: '20px',
-          borderRadius: '12px',
-          border: '1px solid #e5e7eb',
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '20px', fontWeight: '700', color: '#6b7280' }}>
-            {healthData ? (healthData.pg_database_size_bytes / (1024 * 1024 * 1024)).toFixed(1) : '0'} GB
-          </div>
-          <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>DB Size</div>
-        </div>
-
-        <div style={{
-          background: 'white',
-          padding: '20px',
-          borderRadius: '12px',
-          border: '1px solid #e5e7eb',
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: healthData && healthData.pg_locks_total > 10 ? '#f59e0b' : '#10b981' }}>
-            {healthData ? healthData.pg_locks_total : 0}
-          </div>
-          <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>DB Locks</div>
-        </div>
-
-        <div style={{
-          background: 'white',
-          padding: '20px',
-          borderRadius: '12px',
-          border: '1px solid #e5e7eb',
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '20px', fontWeight: '700', color: healthData && healthData.pg_exporter_last_scrape_duration_seconds > 1 ? '#f59e0b' : '#10b981' }}>
-            {healthData ? (healthData.pg_exporter_last_scrape_duration_seconds * 1000).toFixed(0) : 0}ms
-          </div>
-          <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>Scrape Time</div>
-        </div>
-
-        <div style={{
-          background: 'white',
-          padding: '20px',
-          borderRadius: '12px',
-          border: '1px solid #e5e7eb',
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#10b981' }}>
             {lastUpdated ? '✓' : '⏳'}
           </div>
           <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>
@@ -299,17 +256,180 @@ export const V2AlertsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* DB Health Alerts Table */}
-      {healthData && healthAlerts.length > 0 && (
+      {/* PostgreSQL Health */}
+      <div style={{
+        background: 'white',
+        borderRadius: '12px',
+        border: '1px solid #e5e7eb',
+        marginBottom: '24px'
+      }}>
+        <div style={{
+          padding: '20px',
+          borderBottom: '1px solid #e5e7eb',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
+            PostgreSQL Health
+          </h2>
+          <div style={{
+            fontSize: '18px',
+            color: getSeverityColor(postgresOverallStatus)
+          }}>
+            {postgresOverallStatus === 'ok' ? '✓' : postgresOverallStatus === 'warning' ? '⚠️' : '❌'}
+          </div>
+        </div>
+        <div style={{ padding: '20px' }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: '16px'
+          }}>
+            <div style={{
+              background: '#f8fafc',
+              padding: '16px',
+              borderRadius: '8px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: healthData ? getSeverityColor(getMetricStatus(healthData.pg_up, 'pg_up')) : '#6b7280' }}>
+                {healthData ? formatMetricValue(healthData.pg_up, 'pg_up') : 'N/A'}
+              </div>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>PostgreSQL</div>
+            </div>
+
+            <div style={{
+              background: '#f8fafc',
+              padding: '16px',
+              borderRadius: '8px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: healthData ? getSeverityColor(getMetricStatus(healthData.pg_exporter_last_scrape_success, 'pg_exporter_last_scrape_success')) : '#6b7280' }}>
+                {healthData ? formatMetricValue(healthData.pg_exporter_last_scrape_success, 'pg_exporter_last_scrape_success') : 'N/A'}
+              </div>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>PG Exporter</div>
+            </div>
+
+            <div style={{
+              background: '#f8fafc',
+              padding: '16px',
+              borderRadius: '8px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '20px', fontWeight: '700', color: '#6b7280' }}>
+                {healthData ? (healthData.pg_database_size_bytes / (1024 * 1024 * 1024)).toFixed(1) : '0'} GB
+              </div>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>DB Size</div>
+            </div>
+
+            <div style={{
+              background: '#f8fafc',
+              padding: '16px',
+              borderRadius: '8px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: healthData && healthData.pg_locks_total > 10 ? '#f59e0b' : '#10b981' }}>
+                {healthData ? healthData.pg_locks_total : 0}
+              </div>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>DB Locks</div>
+            </div>
+
+            <div style={{
+              background: '#f8fafc',
+              padding: '16px',
+              borderRadius: '8px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '20px', fontWeight: '700', color: healthData && healthData.pg_exporter_last_scrape_duration_seconds > 1 ? '#f59e0b' : '#10b981' }}>
+                {healthData ? (healthData.pg_exporter_last_scrape_duration_seconds * 1000).toFixed(0) : 0}ms
+              </div>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>Scrape Time</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Prometheus Health */}
+      <div style={{
+        background: 'white',
+        borderRadius: '12px',
+        border: '1px solid #e5e7eb',
+        marginBottom: '24px'
+      }}>
+        <div style={{
+          padding: '20px',
+          borderBottom: '1px solid #e5e7eb',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
+            Prometheus Health
+          </h2>
+          <div style={{
+            fontSize: '18px',
+            color: getSeverityColor(prometheusOverallStatus)
+          }}>
+            {prometheusOverallStatus === 'ok' ? '✓' : prometheusOverallStatus === 'warning' ? '⚠️' : '❌'}
+          </div>
+        </div>
+        <div style={{ padding: '20px' }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: '16px'
+          }}>
+            <div style={{
+              background: '#f8fafc',
+              padding: '16px',
+              borderRadius: '8px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: healthData ? getSeverityColor(getMetricStatus(healthData.prom_ready, 'prom_ready')) : '#6b7280' }}>
+                {healthData ? formatMetricValue(healthData.prom_ready, 'prom_ready') : 'N/A'}
+              </div>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>Prometheus</div>
+            </div>
+
+            <div style={{
+              background: '#f8fafc',
+              padding: '16px',
+              borderRadius: '8px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: '#10b981' }}>
+                {healthData ? `${healthData.prom_targets_up}/${healthData.prom_targets_total}` : '0/0'}
+              </div>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>Prom Targets</div>
+            </div>
+
+            <div style={{
+              background: '#f8fafc',
+              padding: '16px',
+              borderRadius: '8px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: '#3b82f6' }}>
+                {healthData ? healthData.watchmqtt_up_targets : 0}
+              </div>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>MQTT Targets</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* PostgreSQL Health Alerts */}
+      {healthData && postgresAlerts.length > 0 && (
         <div style={{
           background: 'white',
           borderRadius: '12px',
           border: '1px solid #e5e7eb',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          marginBottom: '24px'
         }}>
           <div style={{ padding: '20px', borderBottom: '1px solid #e5e7eb' }}>
             <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
-              Database Health Alerts
+              PostgreSQL Health Alerts
             </h2>
           </div>
 
@@ -326,7 +446,100 @@ export const V2AlertsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {healthAlerts.map((alert) => (
+                {postgresAlerts.map((alert) => (
+                  <tr
+                    key={alert.id}
+                    style={{ borderBottom: '1px solid #f1f5f9' }}
+                  >
+                    <td style={{ padding: '16px' }}>
+                      <span style={{
+                        padding: '4px 8px',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        background: getSeverityBgColor(alert.severity),
+                        color: getSeverityColor(alert.severity),
+                        textTransform: 'uppercase'
+                      }}>
+                        {alert.severity}
+                      </span>
+                    </td>
+                    <td style={{ padding: '16px', fontWeight: '500', color: '#1f2937' }}>
+                      {alert.rule}
+                    </td>
+                    <td style={{ padding: '16px', color: '#6b7280', fontSize: '14px', maxWidth: '300px' }}>
+                      {alert.description}
+                    </td>
+                    <td style={{ padding: '16px', color: '#6b7280', fontSize: '14px' }}>
+                      {alert.since}
+                    </td>
+                    <td style={{ padding: '16px' }}>
+                      <span style={{
+                        padding: '4px 8px',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: '500',
+                        background: '#fee2e2',
+                        color: '#991b1b'
+                      }}>
+                        {alert.status}
+                      </span>
+                    </td>
+                    <td style={{ padding: '16px' }}>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button
+                          onClick={fetchHealthData}
+                          style={{
+                            padding: '4px 8px',
+                            background: '#3b82f6',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Refresh
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Prometheus Health Alerts */}
+      {healthData && prometheusAlerts.length > 0 && (
+        <div style={{
+          background: 'white',
+          borderRadius: '12px',
+          border: '1px solid #e5e7eb',
+          overflow: 'hidden',
+          marginBottom: '24px'
+        }}>
+          <div style={{ padding: '20px', borderBottom: '1px solid #e5e7eb' }}>
+            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
+              Prometheus Health Alerts
+            </h2>
+          </div>
+
+          <div style={{ overflowY: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 1 }}>
+                <tr>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', color: '#6b7280' }}>Severity</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', color: '#6b7280' }}>Service</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', color: '#6b7280' }}>Description</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', color: '#6b7280' }}>Since</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', color: '#6b7280' }}>Status</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', color: '#6b7280' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {prometheusAlerts.map((alert) => (
                   <tr
                     key={alert.id}
                     style={{ borderBottom: '1px solid #f1f5f9' }}

@@ -58,7 +58,7 @@ export const getMetricStatus = (value: number, metric: string): 'ok' | 'warning'
       return value > 0 ? 'ok' : 'error'
     
     case 'watchmqtt_up_targets':
-      return value >= 3 ? 'ok' : 'warning'
+      return value > 0 ? 'ok' : 'warning'
     
     case 'pg_exporter_last_scrape_duration_seconds':
       // Consider anything under 1 second as good
