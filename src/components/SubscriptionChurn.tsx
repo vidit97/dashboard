@@ -27,44 +27,188 @@ export default function SubscriptionChurn({ className, refreshInterval = 120 }: 
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   const processChurnData = useCallback((events: SubscriptionEvent[]) => {
-    // Group events by 5-minute buckets and aggregate
-    const buckets = new Map()
+    if (timeRange === '7d') {
+      // FOR 7D: Use continuous interval generation (like Sessions chart)
+      const bucketMinutes = 180 // 3 hours
+      const hoursBack = 168 // 7 days
+      
+      const endTime = new Date()
+      const startTime = new Date()
+      startTime.setHours(startTime.getHours() - hoursBack)
+      
+      const intervals = Math.ceil(hoursBack * 60 / bucketMinutes)
+      const chartDataPoints: ChurnData[] = []
+      
+      // Create buckets for events
+      const eventBuckets = new Map()
+      
+      events.forEach(event => {
+        const eventTime = new Date(event.ts)
+        // For 7d: group by 3-hour intervals
+        const bucketTime = new Date(
+          eventTime.getFullYear(),
+          eventTime.getMonth(),
+          eventTime.getDate(),
+          Math.floor(eventTime.getHours() / 3) * 3,
+          0,
+          0,
+          0
+        )
 
-    events.forEach(event => {
-      const eventTime = new Date(event.ts)
-      const bucketTime = new Date(
-        eventTime.getFullYear(),
-        eventTime.getMonth(),
-        eventTime.getDate(),
-        eventTime.getHours(),
-        Math.floor(eventTime.getMinutes() / 5) * 5
-      )
+        const bucketKey = bucketTime.toISOString()
 
-      const bucketKey = bucketTime.toISOString()
+        if (!eventBuckets.has(bucketKey)) {
+          eventBuckets.set(bucketKey, {
+            subscribes: 0,
+            unsubscribes: 0
+          })
+        }
 
-      if (!buckets.has(bucketKey)) {
-        buckets.set(bucketKey, {
-          timestamp: bucketKey,
-          time: formatShortTime(bucketKey),
-          subscribes: 0,
-          unsubscribes: 0,
-          netChange: 0
+        const bucket = eventBuckets.get(bucketKey)
+        if (event.action === 'subscribe') {
+          bucket.subscribes += event.count
+        } else if (event.action === 'unsubscribe') {
+          bucket.unsubscribes += event.count
+        }
+      })
+
+      // Generate continuous intervals for 7d
+      for (let i = 0; i < intervals; i++) {
+        const intervalStart = new Date(startTime.getTime() + i * bucketMinutes * 60000)
+        
+        // Align to 3-hour boundaries
+        const normalizedInterval = new Date(
+          intervalStart.getFullYear(),
+          intervalStart.getMonth(),
+          intervalStart.getDate(),
+          Math.floor(intervalStart.getHours() / 3) * 3,
+          0,
+          0,
+          0
+        )
+        
+        const normalizedKey = normalizedInterval.toISOString()
+        
+        // Get event data for this normalized interval, or default to 0
+        const eventData = eventBuckets.get(normalizedKey) || { subscribes: 0, unsubscribes: 0 }
+        
+        chartDataPoints.push({
+          timestamp: normalizedKey,
+          time: formatShortTime(normalizedKey), // Will be updated below
+          subscribes: eventData.subscribes,
+          unsubscribes: eventData.unsubscribes,
+          netChange: eventData.subscribes - eventData.unsubscribes
         })
       }
 
-      const bucket = buckets.get(bucketKey)
-      if (event.action === 'subscribe') {
-        bucket.subscribes += event.count
-      } else if (event.action === 'unsubscribe') {
-        bucket.unsubscribes += event.count
-      }
-      bucket.netChange = bucket.subscribes - bucket.unsubscribes
-    })
+      return chartDataPoints
+    } else {
+      // FOR 24H: Use continuous intervals with 30-minute buckets (48 data points total)
+      const bucketMinutes = 30 // 30 minutes for better balance
+      const hoursBack = 24
+      
+      const endTime = new Date()
+      const startTime = new Date()
+      startTime.setHours(startTime.getHours() - hoursBack)
+      
+      const intervals = Math.ceil(hoursBack * 60 / bucketMinutes)
+      const chartDataPoints: ChurnData[] = []
+      
+      // Create buckets for events
+      const eventBuckets = new Map()
+      
+      events.forEach(event => {
+        const eventTime = new Date(event.ts)
+        // For 24h: group by 30-minute intervals
+        const bucketTime = new Date(
+          eventTime.getFullYear(),
+          eventTime.getMonth(),
+          eventTime.getDate(),
+          eventTime.getHours(),
+          Math.floor(eventTime.getMinutes() / 30) * 30,
+          0,
+          0
+        )
 
-    return Array.from(buckets.values()).sort((a, b) =>
-      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    )
-  }, [])
+        const bucketKey = bucketTime.toISOString()
+
+        if (!eventBuckets.has(bucketKey)) {
+          eventBuckets.set(bucketKey, {
+            subscribes: 0,
+            unsubscribes: 0
+          })
+        }
+
+        const bucket = eventBuckets.get(bucketKey)
+        if (event.action === 'subscribe') {
+          bucket.subscribes += event.count
+        } else if (event.action === 'unsubscribe') {
+          bucket.unsubscribes += event.count
+        }
+      })
+
+      // Generate continuous intervals for 24h
+      for (let i = 0; i < intervals; i++) {
+        const intervalStart = new Date(startTime.getTime() + i * bucketMinutes * 60000)
+        
+        // Align to 30-minute boundaries
+        const normalizedInterval = new Date(
+          intervalStart.getFullYear(),
+          intervalStart.getMonth(),
+          intervalStart.getDate(),
+          intervalStart.getHours(),
+          Math.floor(intervalStart.getMinutes() / 30) * 30,
+          0,
+          0
+        )
+        
+        const normalizedKey = normalizedInterval.toISOString()
+        
+        // Get event data for this normalized interval, or default to 0
+        const eventData = eventBuckets.get(normalizedKey) || { subscribes: 0, unsubscribes: 0 }
+        
+        chartDataPoints.push({
+          timestamp: normalizedKey,
+          time: formatShortTime(normalizedKey),
+          subscribes: eventData.subscribes,
+          unsubscribes: eventData.unsubscribes,
+          netChange: eventData.subscribes - eventData.unsubscribes
+        })
+      }
+
+      return chartDataPoints
+    }
+  }, [timeRange])
+
+  // Apply date labeling for 7d data after processing
+  const applyDateLabeling = useCallback((data: ChurnData[]) => {
+    if (timeRange === '7d' && data.length > 0) {
+      data.forEach((item, index) => {
+        const intervalStart = new Date(item.timestamp)
+        const currentDay = intervalStart.getUTCDate()
+        const previousInterval = index > 0 ? new Date(data[index - 1].timestamp) : null
+        const previousDay = previousInterval ? previousInterval.getUTCDate() : null
+        
+        // Show date when day changes or for the first data point (SAME LOGIC AS SESSIONS)
+        if (index === 0 || currentDay !== previousDay) {
+          item.time = intervalStart.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            timeZone: 'UTC'
+          })
+        } else {
+          // Show only time for other intervals
+          item.time = intervalStart.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+            timeZone: 'UTC'
+          })
+        }
+      })
+    }
+    return data
+  }, [timeRange])
 
   const fetchChurnData = useCallback(async () => {
     try {
@@ -74,7 +218,8 @@ export default function SubscriptionChurn({ className, refreshInterval = 120 }: 
       const hoursBack = timeRange === '24h' ? 24 : 168
       const events = await GreApiService.getSubscriptionChurn(hoursBack)
       const processed = processChurnData(events)
-      setChurnData(processed)
+      const withDateLabels = applyDateLabeling(processed)
+      setChurnData(withDateLabels)
       
       setLastUpdated(new Date())
     } catch (err) {
@@ -279,7 +424,7 @@ export default function SubscriptionChurn({ className, refreshInterval = 120 }: 
             marginBottom: '16px',
             marginTop: '0'
           }}>
-            Subscription Activity (5-min intervals)
+            Subscription Activity ({timeRange === '7d' ? '3-hour intervals' : '30-min intervals'})
           </h3>
 
           <div style={{ width: '100%', height: CHART_HEIGHTS.container }}>
@@ -291,13 +436,85 @@ export default function SubscriptionChurn({ className, refreshInterval = 120 }: 
                 <CartesianGrid strokeDasharray={CHART_STYLES.cartesianGrid.strokeDasharray} stroke={CHART_STYLES.cartesianGrid.stroke} />
                 <XAxis
                   dataKey="time"
-                  tick={AXIS_STYLES.tick}
-                  interval="preserveStartEnd"
+                  interval={0}
                   angle={-45}
                   textAnchor="end"
                   height={AXIS_DIMENSIONS.xAxisHeight}
                   axisLine={AXIS_STYLES.axisLine}
                   tickLine={AXIS_STYLES.tickLine}
+                  tick={(props) => {
+                    const { x, y, payload } = props
+                    const value = payload.value
+                    const isDate = !value.includes(':')
+
+                    if (timeRange === '7d') {
+                      const index = payload.index
+
+                      if (isDate) {
+                        // ALWAYS show date labels - never filter them out
+                        return (
+                          <g transform={`translate(${x},${y})`}>
+                            <text
+                              x={0}
+                              y={0}
+                              dy={16}
+                              textAnchor="end"
+                              fill="#1f2937"
+                              fontSize={13}
+                              fontWeight={600}
+                              transform="rotate(-45)"
+                            >
+                              {value}
+                            </text>
+                          </g>
+                        )
+                      } else {
+                        // For time labels with 3-hour intervals, show every 2nd (every 6 hours) to reduce clutter
+                        const isEvery2nd = index % 2 === 0
+                        if (!isEvery2nd) return null
+
+                        return (
+                          <g transform={`translate(${x},${y})`}>
+                            <text
+                              x={0}
+                              y={0}
+                              dy={16}
+                              textAnchor="end"
+                              fill="#6b7280"
+                              fontSize={12}
+                              fontWeight={400}
+                              transform="rotate(-45)"
+                            >
+                              {value}
+                            </text>
+                          </g>
+                        )
+                      }
+                    } else {
+                      // For 24h view, show every 4th label (every 2 hours for 30-min intervals)
+                      const index = payload.index
+                      const isEvery4th = index % 4 === 0
+                      if (!isEvery4th) return null
+                    }
+
+                    // For 24h view, use default styling
+                    return (
+                      <g transform={`translate(${x},${y})`}>
+                        <text
+                          x={0}
+                          y={0}
+                          dy={16}
+                          textAnchor="end"
+                          fill="#374151"
+                          fontSize={12}
+                          fontWeight={400}
+                          transform="rotate(-45)"
+                        >
+                          {value}
+                        </text>
+                      </g>
+                    )
+                  }}
                 />
                 <YAxis
                   tick={AXIS_STYLES.tick}
