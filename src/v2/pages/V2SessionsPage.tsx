@@ -746,21 +746,6 @@ export const V2SessionsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Session Reliability Component - Full Width */}
-      <div style={{ marginBottom: '32px' }}>
-        <div style={{
-          background: 'white',
-          borderRadius: '12px',
-          padding: '24px',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
-        }}>
-          <SessionReliability
-            className="session-reliability-chart"
-            refreshInterval={120}
-          />
-        </div>
-      </div>
 
       {/* Recent Connects/Disconnects Component - Full Width */}
       <div style={{ marginBottom: '32px' }}>
@@ -790,6 +775,23 @@ export const V2SessionsPage: React.FC = () => {
           <ClientGantt
             className="client-gantt-chart"
             refreshInterval={30}
+          />
+        </div>
+      </div>
+
+      {/* Session Reliability Component - Full Width */}
+      <div style={{ marginBottom: '32px' }}>
+        <div style={{
+          background: 'white',
+          borderRadius: '12px',
+          padding: '24px',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+        }}>
+          <SessionReliability
+            className="session-reliability-chart"
+            refreshInterval={120}
+            timeRange={sessionTimeRange}
           />
         </div>
       </div>

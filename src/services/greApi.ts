@@ -126,20 +126,48 @@ export class GreApiService {
     }
   }
 
-  // Get sessions from last 7 days with durations - optimized for performance
-  static async getSessionsLast7Days(): Promise<SessionDuration[]> {
+  // Get sessions by time range with durations - optimized for performance
+  static async getSessionsByTimeRange(timeRange: '1h' | '6h' | '24h' | '7d' | '30d' | 'all'): Promise<SessionDuration[]> {
     try {
-      const sevenDaysAgo = new Date()
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-      const isoDate = sevenDaysAgo.toISOString()
+      let startDate: Date | null = null
 
-      console.log(`Fetching sessions since: ${isoDate}`)
+      if (timeRange !== 'all') {
+        startDate = new Date()
+
+        switch (timeRange) {
+          case '1h':
+            startDate.setHours(startDate.getHours() - 1)
+            break
+          case '6h':
+            startDate.setHours(startDate.getHours() - 6)
+            break
+          case '24h':
+            startDate.setDate(startDate.getDate() - 1)
+            break
+          case '7d':
+            startDate.setDate(startDate.getDate() - 7)
+            break
+          case '30d':
+            startDate.setDate(startDate.getDate() - 30)
+            break
+        }
+      }
+
+      let query = `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?select=start_ts,end_ts,client,username`
+
+      if (startDate) {
+        const isoDate = startDate.toISOString()
+        console.log(`Fetching sessions since: ${isoDate}`)
+        query += `&start_ts=gte.${isoDate}`
+      } else {
+        console.log(`Fetching all sessions`)
+      }
+
+      query += `&order=start_ts.desc`
 
       // Limit to 5000 most recent sessions to prevent timeouts
       // This provides a good statistical sample for histogram analysis
-      const response = await greApi.get<Session[]>(
-        `${GRE_API_CONFIG.ENDPOINTS.SESSIONS}?select=start_ts,end_ts,client,username&start_ts=gte.${isoDate}&order=start_ts.desc`
-      )
+      const response = await greApi.get<Session[]>(query)
 
       console.log(`Fetched ${response.data.length} sessions for analysis`)
 
@@ -149,7 +177,7 @@ export class GreApiService {
           const start = new Date(session.start_ts!).getTime()
           const end = session.end_ts ? new Date(session.end_ts).getTime() : Date.now()
           const durationMinutes = (end - start) / (1000 * 60)
-          
+
           return {
             duration: Math.max(0, durationMinutes), // Ensure non-negative
             client: session.client || 'Unknown',
@@ -157,9 +185,14 @@ export class GreApiService {
           }
         })
     } catch (error) {
-      console.error('Error fetching sessions from last 7 days:', error)
+      console.error(`Error fetching sessions for time range ${timeRange}:`, error)
       throw new Error('Failed to fetch session duration data')
     }
+  }
+
+  // Get sessions from last 7 days with durations - optimized for performance
+  static async getSessionsLast7Days(): Promise<SessionDuration[]> {
+    return this.getSessionsByTimeRange('7d')
   }
 
   // Get all events
