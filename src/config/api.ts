@@ -83,21 +83,10 @@ export interface Rollups24hData {
 export interface ContainerData {
   broker: string
   container_id_regex: string
-  cpu: {
-    use_rate: number
-    max_cores: number
-    quota_cores: number | null
-  }
-  memory: {
-    use_bytes: number
-    max_bytes: number
-  }
-  disk: {
-    store_bytes: number
-  }
-  lifecycle: {
-    start_time: number
-    last_seen: number
-    uptime_seconds: number
-  }
+  cpu_percent: number
+  memory_percent: number
+  uptime_seconds: number
+  first_seen: number
+  last_seen: number
+  store_bytes: number
 }

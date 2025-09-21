@@ -180,29 +180,120 @@ export const V2ClientsPage: React.FC = () => {
           clientFilters['username'] = `ilike.*${escaped}*`
         }
 
-        const clientsResult = await GreApiService.getClientsPaginated({
-          limit: pageSize,
-          offset: offset,
-          filters: clientFilters
-        })
+        let clientsResult
+        let clientIds: string[]
+        let sessionsResult
 
-        const clientIds = clientsResult.data.map(c => c.client)
+        if (statusFilterValue === 'closed') {
+          // For closed sessions: start with ended sessions, then get unique clients
+          // This is much more logical than trying to filter all clients
+
+          // Get ended sessions with username filter if provided
+          const endedSessionFilters: Record<string, string> = {
+            'end_ts': 'not.is.null'
+          }
+
+          // Add username filter to sessions if provided
+          if (searchFilter && searchFilter.trim()) {
+            const escaped = searchFilter.replace(/([%_])/g, '\\$1')
+            endedSessionFilters['username'] = `ilike.*${escaped}*`
+          }
+
+          // Get ended sessions
+          const endedSessionsResult = await GreApiService.getSessionsPaginated({
+            limit: 1000, // Get a batch of ended sessions
+            offset: offset,
+            filters: endedSessionFilters,
+            sortColumn: 'end_ts',
+            sortDirection: 'desc'
+          })
+
+          console.log('🔍 Found', endedSessionsResult.data.length, 'ended sessions, total:', endedSessionsResult.totalCount)
+
+          // Get unique client IDs from ended sessions
+          const endedSessionClientIds = [...new Set(endedSessionsResult.data.map(s => s.client))]
+
+          if (endedSessionClientIds.length === 0) {
+            setClients([])
+            setTotalClientsCount(endedSessionsResult.totalCount)
+            return
+          }
+
+          // Limit client IDs to avoid URL length issues (max ~100 client IDs at a time)
+          const limitedClientIds = endedSessionClientIds.slice(0, 100)
+
+          // Get client details for these ended sessions
+          const clientsFromEndedSessions = await GreApiService.getClientsPaginated({
+            limit: 100,
+            offset: 0,
+            filters: { 'client': `in.(${limitedClientIds.join(',')})` }
+          })
+
+          // Get active sessions for these clients to determine current state
+          const activeSessionsForClientsResult = await GreApiService.getSessionsPaginated({
+            limit: 1000,
+            offset: 0,
+            filters: {
+              'end_ts': 'is.null',
+              'client': `in.(${limitedClientIds.join(',')})`
+            }
+          })
+
+          const activeClientIds = new Set(activeSessionsForClientsResult.data.map(s => s.client))
+
+          // Filter to only clients that DON'T have active sessions (truly closed)
+          const trulyClosedClients = clientsFromEndedSessions.data.filter(client => !activeClientIds.has(client.client))
+
+          console.log('🔍 Results:', {
+            endedSessions: endedSessionsResult.data.length,
+            uniqueClientsFromEndedSessions: endedSessionClientIds.length,
+            clientsWithActiveState: activeClientIds.size,
+            trulyClosedClients: trulyClosedClients.length
+          })
+
+          clientIds = trulyClosedClients.map(c => c.client)
+          // For closed sessions, we know there are no active sessions
+          sessionsResult = { data: [] }
+
+          // Build the client result
+          clientsResult = {
+            data: trulyClosedClients,
+            totalCount: endedSessionsResult.totalCount // Use ended sessions count as approximation
+          }
+
+          setTotalClientsCount(endedSessionsResult.totalCount)
+        } else {
+          // For open sessions or all: use the original logic
+          clientsResult = await GreApiService.getClientsPaginated({
+            limit: pageSize,
+            offset: offset,
+            filters: clientFilters
+          })
+
+          clientIds = clientsResult.data.map(c => c.client)
+          
+          if (clientIds.length === 0) {
+            setClients([])
+            setTotalClientsCount(clientsResult.totalCount)
+            return
+          }
+
+          // Get active sessions for these clients
+          sessionsResult = await GreApiService.getSessionsPaginated({
+            limit: 1000,
+            offset: 0,
+            filters: { 
+              'end_ts': 'is.null',
+              'client': `in.(${clientIds.join(',')})`
+            }
+          })
+        }
         
         if (clientIds.length === 0) {
           setClients([])
           setTotalClientsCount(clientsResult.totalCount)
           return
         }
-
-        // Get active sessions for these clients
-        const sessionsResult = await GreApiService.getSessionsPaginated({
-          limit: 1000,
-          offset: 0,
-          filters: { 
-            'end_ts': 'is.null',
-            'client': `in.(${clientIds.join(',')})`
-          }
-        })
 
         // Get subscriptions for these clients
         const subscriptionsResult = await GreApiService.getSubscriptionsPaginated({
@@ -233,9 +324,11 @@ export const V2ClientsPage: React.FC = () => {
           const session = sessionsMap.get(client.client)
           const clientSubscriptions = clientSubscriptionsMap.get(client.client) || []
 
+          const sessionState = session ? 'open' : 'closed'
+          
           return {
             ...client,
-            session_state: session ? 'open' : 'closed',
+            session_state: sessionState,
             last_seen: client.last_seen,
             ip_port: session ? `${session.ip_address || 'N/A'}:${session.port || 'N/A'}` : 'N/A',
             protocol_ver: session?.protocol_version || 'N/A',
@@ -249,13 +342,19 @@ export const V2ClientsPage: React.FC = () => {
           }
         })
 
-        // Apply status filter for 'closed' sessions
-        if (statusFilterValue === 'closed') {
-          enhancedClients = enhancedClients.filter(client => client.session_state === 'closed')
-        }
+        console.log('🔍 Enhanced clients state breakdown:', {
+          total: enhancedClients.length,
+          open: enhancedClients.filter(c => c.session_state === 'open').length,
+          closed: enhancedClients.filter(c => c.session_state === 'closed').length,
+          statusFilter: statusFilterValue
+        })
+
+        console.log('🔍 Final clients to display:', enhancedClients.length, 'Filter:', statusFilterValue)
 
         setClients(enhancedClients)
-        setTotalClientsCount(clientsResult.totalCount)
+        if (statusFilterValue !== 'closed') {
+          setTotalClientsCount(clientsResult.totalCount)
+        }
       }
       
     } catch (err) {
