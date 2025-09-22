@@ -35,15 +35,41 @@ export const formatTimestamp = (timestamp: string): string => {
 }
 
 export class ACLApiService {
+  // Cache the current broker to use for operations
+  private static currentBroker: string | null = null
+
   // Get dynamic security state (main data source)
-  static async getState(broker: string = 'local'): Promise<ApiResponse<DynState>> {
+  static async getState(broker?: string): Promise<ApiResponse<DynState>> {
     try {
-      console.log('Getting dynamic security state for broker:', broker)
-      const response = await aclApi.get<DynState[]>(
-        `${ACL_API_CONFIG.ENDPOINTS.DYN_STATE}?broker=eq.${broker}`
-      )
+      console.log('Getting dynamic security state', broker ? `for broker: ${broker}` : 'for all brokers')
+      
+      let response: any
+      if (broker) {
+        // If broker is specified, filter by that broker
+        response = await aclApi.get<DynState[]>(
+          `${ACL_API_CONFIG.ENDPOINTS.DYN_STATE}?broker=eq.${broker}`
+        )
+      } else {
+        // If no broker specified, get all available brokers
+        response = await aclApi.get<DynState[]>(ACL_API_CONFIG.ENDPOINTS.DYN_STATE)
+      }
+      
       console.log('State response:', response.data)
+      
+      if (!response.data || response.data.length === 0) {
+        return {
+          error: { message: 'No broker data found' },
+          ok: false
+        }
+      }
+      
+      // If multiple brokers, use the first one (or you could implement broker selection logic)
       const state = response.data[0]
+      console.log('Using broker:', state.broker)
+      
+      // Cache the broker for use in operations
+      this.currentBroker = state.broker
+      
       return { data: state, ok: true }
     } catch (error) {
       console.error('State API call failed:', error)
@@ -55,12 +81,13 @@ export class ACLApiService {
   }
 
   // Create backup
-  static async backupNow(broker: string = 'local', notes: string = 'Manual backup'): Promise<ApiResponse<number>> {
+  static async backupNow(broker?: string, notes: string = 'Manual backup'): Promise<ApiResponse<number>> {
     try {
-      console.log('Creating backup for broker:', broker)
+      const targetBroker = broker || this.currentBroker || 'local'
+      console.log('Creating backup for broker:', targetBroker)
       const response = await aclApi.post<number>(
         ACL_API_CONFIG.ENDPOINTS.DS_BACKUP_NOW,
-        { p_broker: broker, p_notes: notes }
+        { p_broker: targetBroker, p_notes: notes }
       )
       console.log('Backup response:', response.data)
       return { data: response.data, ok: true }
@@ -74,10 +101,11 @@ export class ACLApiService {
   }
 
   // Get backups list
-  static async getBackups(broker: string = 'local'): Promise<ApiResponse<BackupItem[]>> {
+  static async getBackups(broker?: string): Promise<ApiResponse<BackupItem[]>> {
     try {
+      const targetBroker = broker || this.currentBroker || 'local'
       const response = await aclApi.get<BackupItem[]>(
-        `${ACL_API_CONFIG.ENDPOINTS.DYN_BACKUPS}?broker=eq.${broker}&order=taken_at.desc`
+        `${ACL_API_CONFIG.ENDPOINTS.DYN_BACKUPS}?broker=eq.${targetBroker}&order=taken_at.desc`
       )
       return { data: response.data, ok: true }
     } catch (error) {
@@ -203,7 +231,7 @@ export class ACLApiService {
 
   // Create a new role
   static async createRole(rolename: string, acls: RoleACL[] = [], dryRun: boolean = false): Promise<ApiResponse<DSApplyResponse>> {
-    return this.applyOperation('local', 'create_role', { 
+    return this.applyOperation(this.currentBroker || 'local', 'create_role', { 
       rolename, 
       acls 
     }, dryRun)
@@ -211,7 +239,7 @@ export class ACLApiService {
 
   // Add ACL to role
   static async addRoleACL(role: string, acltype: string, topic: string, allow: boolean, priority: number = 0, dryRun: boolean = false): Promise<ApiResponse<DSApplyResponse>> {
-    return this.applyOperation('local', 'add_role_acl', {
+    return this.applyOperation(this.currentBroker || 'local', 'add_role_acl', {
       role,
       acltype,
       topic,
@@ -222,7 +250,7 @@ export class ACLApiService {
 
   // Remove ACL from role
   static async removeRoleACL(role: string, acltype: string, topic: string, dryRun: boolean = false): Promise<ApiResponse<DSApplyResponse>> {
-    return this.applyOperation('local', 'remove_role_acl', {
+    return this.applyOperation(this.currentBroker || 'local', 'remove_role_acl', {
       role,
       acltype,
       topic
@@ -231,7 +259,7 @@ export class ACLApiService {
 
   // Create a new client
   static async createClient(username: string, password: string, enable: boolean = true, roles: ClientRole[] = [], dryRun: boolean = false): Promise<ApiResponse<DSApplyResponse>> {
-    return this.applyOperation('local', 'create_client', {
+    return this.applyOperation(this.currentBroker || 'local', 'create_client', {
       username,
       password,
       enable,
@@ -241,7 +269,7 @@ export class ACLApiService {
 
   // Add role to client
   static async addClientRole(username: string, rolename: string, priority: number = 0, dryRun: boolean = false): Promise<ApiResponse<DSApplyResponse>> {
-    return this.applyOperation('local', 'add_client_role', {
+    return this.applyOperation(this.currentBroker || 'local', 'add_client_role', {
       username,
       rolename,
       priority
@@ -250,7 +278,7 @@ export class ACLApiService {
 
   // Remove role from client
   static async removeClientRole(username: string, rolename: string, dryRun: boolean = false): Promise<ApiResponse<DSApplyResponse>> {
-    return this.applyOperation('local', 'remove_client_role', {
+    return this.applyOperation(this.currentBroker || 'local', 'remove_client_role', {
       username,
       rolename
     }, dryRun)
@@ -258,21 +286,21 @@ export class ACLApiService {
 
   // Enable client
   static async enableClient(username: string, dryRun: boolean = false): Promise<ApiResponse<DSApplyResponse>> {
-    return this.applyOperation('local', 'enable_client', {
+    return this.applyOperation(this.currentBroker || 'local', 'enable_client', {
       username
     }, dryRun)
   }
 
   // Disable client
   static async disableClient(username: string, dryRun: boolean = false): Promise<ApiResponse<DSApplyResponse>> {
-    return this.applyOperation('local', 'disable_client', {
+    return this.applyOperation(this.currentBroker || 'local', 'disable_client', {
       username
     }, dryRun)
   }
 
   // Set client password
   static async setClientPassword(username: string, password: string, dryRun: boolean = false): Promise<ApiResponse<DSApplyResponse>> {
-    return this.applyOperation('local', 'set_client_password', {
+    return this.applyOperation(this.currentBroker || 'local', 'set_client_password', {
       username,
       password
     }, dryRun)
@@ -280,7 +308,7 @@ export class ACLApiService {
 
   // Refresh state
   static async refreshState(dryRun: boolean = false): Promise<ApiResponse<DSApplyResponse>> {
-    return this.applyOperation('local', 'refresh_state', {}, dryRun)
+    return this.applyOperation(this.currentBroker || 'local', 'refresh_state', {}, dryRun)
   }
 
   // Poll queue status for completion (alias for pollQueueItem)
