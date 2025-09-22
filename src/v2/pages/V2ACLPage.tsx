@@ -207,10 +207,10 @@ export const V2ACLPage: React.FC = () => {
               borderRadius: '12px',
               fontSize: '12px',
               fontWeight: '500',
-              background: '#d1fae5',
-              color: '#065f46'
+              background: overviewLoading ? '#f3f4f6' : (overviewData?.defaultAcl?.publishSend ? '#d1fae5' : '#fee2e2'),
+              color: overviewLoading ? '#6b7280' : (overviewData?.defaultAcl?.publishSend ? '#065f46' : '#991b1b')
             }}>
-              Allow
+              {overviewLoading ? '...' : (overviewData?.defaultAcl?.publishSend ? 'Allow' : 'Deny')}
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -221,10 +221,10 @@ export const V2ACLPage: React.FC = () => {
               borderRadius: '12px',
               fontSize: '12px',
               fontWeight: '500',
-              background: '#d1fae5',
-              color: '#065f46'
+              background: overviewLoading ? '#f3f4f6' : (overviewData?.defaultAcl?.publishRecv ? '#d1fae5' : '#fee2e2'),
+              color: overviewLoading ? '#6b7280' : (overviewData?.defaultAcl?.publishRecv ? '#065f46' : '#991b1b')
             }}>
-              Allow
+              {overviewLoading ? '...' : (overviewData?.defaultAcl?.publishRecv ? 'Allow' : 'Deny')}
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -235,10 +235,10 @@ export const V2ACLPage: React.FC = () => {
               borderRadius: '12px',
               fontSize: '12px',
               fontWeight: '500',
-              background: '#d1fae5',
-              color: '#065f46'
+              background: overviewLoading ? '#f3f4f6' : (overviewData?.defaultAcl?.subscribe ? '#d1fae5' : '#fee2e2'),
+              color: overviewLoading ? '#6b7280' : (overviewData?.defaultAcl?.subscribe ? '#065f46' : '#991b1b')
             }}>
-              Allow
+              {overviewLoading ? '...' : (overviewData?.defaultAcl?.subscribe ? 'Allow' : 'Deny')}
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -249,10 +249,10 @@ export const V2ACLPage: React.FC = () => {
               borderRadius: '12px',
               fontSize: '12px',
               fontWeight: '500',
-              background: '#d1fae5',
-              color: '#065f46'
+              background: overviewLoading ? '#f3f4f6' : (overviewData?.defaultAcl?.unsubscribe ? '#d1fae5' : '#fee2e2'),
+              color: overviewLoading ? '#6b7280' : (overviewData?.defaultAcl?.unsubscribe ? '#065f46' : '#991b1b')
             }}>
-              Allow
+              {overviewLoading ? '...' : (overviewData?.defaultAcl?.unsubscribe ? 'Allow' : 'Deny')}
             </span>
           </div>
         </div>

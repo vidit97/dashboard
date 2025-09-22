@@ -211,25 +211,6 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onRefresh }) =
             </div>
           </div>
           
-          <div>
-            <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '4px' }}>
-              Default ACL Settings
-            </div>
-            <div style={{ fontSize: '14px' }}>
-              <div style={{ color: overview.defaultAcl?.publishSend ? '#059669' : '#dc2626' }}>
-                Publish Send: {overview.defaultAcl?.publishSend ? 'Allowed' : 'Denied'}
-              </div>
-              <div style={{ color: overview.defaultAcl?.publishRecv ? '#059669' : '#dc2626' }}>
-                Publish Recv: {overview.defaultAcl?.publishRecv ? 'Allowed' : 'Denied'}
-              </div>
-              <div style={{ color: overview.defaultAcl?.subscribe ? '#059669' : '#dc2626' }}>
-                Subscribe: {overview.defaultAcl?.subscribe ? 'Allowed' : 'Denied'}
-              </div>
-              <div style={{ color: overview.defaultAcl?.unsubscribe ? '#059669' : '#dc2626' }}>
-                Unsubscribe: {overview.defaultAcl?.unsubscribe ? 'Allowed' : 'Denied'}
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
