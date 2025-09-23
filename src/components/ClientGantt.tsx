@@ -6,6 +6,7 @@ import SearchFilterTable from './SearchFilterTable'
 interface ClientGanttProps {
   className?: string
   refreshInterval?: number
+  excludeAdminUsers?: boolean
 }
 
 // Mock data for fallback
@@ -42,7 +43,7 @@ const MOCK_GANTT_DATA: ClientGanttEntry[] = [
   }
 ]
 
-export default function ClientGantt({ className, refreshInterval = 300 }: ClientGanttProps) {
+export default function ClientGantt({ className, refreshInterval = 300, excludeAdminUsers = false }: ClientGanttProps) {
   const [ganttData, setGanttData] = useState(MOCK_GANTT_DATA)
   const [timeRange, setTimeRange] = useState('24h')
   const [loading, setLoading] = useState(true)
@@ -106,9 +107,13 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
           // First load: prefer username 'greAgent' if available, else pick one recent username
           try {
             const { usernames } = await GreApiService.searchClientsAndUsernames('', hoursBack, 200)
-            const initialUsername = (usernames && usernames.includes('greAgent'))
+            // Filter out admin usernames if excludeAdminUsers is enabled
+            const filteredUsernames = excludeAdminUsers
+              ? usernames.filter(username => username !== 'admin')
+              : usernames
+            const initialUsername = (filteredUsernames && filteredUsernames.includes('greAgent'))
               ? 'greAgent'
-              : (usernames && usernames.length > 0 ? usernames[0] : null)
+              : (filteredUsernames && filteredUsernames.length > 0 ? filteredUsernames[0] : null)
 
             if (initialUsername) {
               setSelectedUsernames([initialUsername])
@@ -207,7 +212,7 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
     } finally {
       setLoading(false)
     }
-  }, [timeRange, useMockData, selectedClientIds, selectedUsernames, initialLoad])
+  }, [timeRange, useMockData, selectedClientIds, selectedUsernames, initialLoad, excludeAdminUsers])
 
   useEffect(() => {
     fetchGanttData()
@@ -249,41 +254,53 @@ export default function ClientGantt({ className, refreshInterval = 300 }: Client
       } else {
         const hoursBack = timeRange === '24h' ? 24 : 168
         const { clients, usernames } = await GreApiService.searchClientsAndUsernames(
-          searchTerm, 
-          hoursBack, 
+          searchTerm,
+          hoursBack,
           200 // Get more results for better search experience
         )
-        
+
+        // Filter out admin usernames if excludeAdminUsers is enabled
+        const filteredUsernames = excludeAdminUsers
+          ? usernames.filter(username => username !== 'admin')
+          : usernames
+
         setAvailableFilterData({
           client: clients,
-          username: usernames
+          username: filteredUsernames
         })
       }
     } catch (err) {
       console.error('Error fetching filter data:', err)
       // Keep existing data on error
     }
-  }, [ganttData, useMockData, timeRange])
+  }, [ganttData, useMockData, timeRange, excludeAdminUsers])
 
   const applyFilters = useCallback((data: ClientGanttEntry[]) => {
     let filtered = data
 
+    // Apply admin user exclusion if enabled
+    if (excludeAdminUsers) {
+      filtered = filtered.filter(entry =>
+        entry.username !== 'admin'
+      )
+    }
+
     // Apply client filter
     if (selectedFilters.client && selectedFilters.client.length > 0) {
-      filtered = filtered.filter(entry => 
+      filtered = filtered.filter(entry =>
         selectedFilters.client.includes(entry.client)
       )
     }
 
     // Apply username filter
     if (selectedFilters.username && selectedFilters.username.length > 0) {
-      filtered = filtered.filter(entry => 
+      filtered = filtered.filter(entry =>
         selectedFilters.username.includes(entry.username)
       )
     }
 
     return filtered
-  }, [selectedFilters])
+  }, [selectedFilters, excludeAdminUsers])
 
   const updatePaginatedData = useCallback(() => {
     const filtered = applyFilters(ganttData)

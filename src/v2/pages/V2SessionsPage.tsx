@@ -849,6 +849,7 @@ export const V2SessionsPage: React.FC = () => {
           <ClientGantt
             className="client-gantt-chart"
             refreshInterval={30}
+            excludeAdminUsers={true}
           />
         </div>
       </div>
