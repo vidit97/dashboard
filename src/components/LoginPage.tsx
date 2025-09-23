@@ -205,29 +205,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           </button>
         </form>
 
-        {/* Demo Credentials */}
-        <div style={{
-          marginTop: '32px',
-          padding: '16px',
-          background: '#f8fafc',
-          borderRadius: '8px',
-          border: '1px solid #e5e7eb'
-        }}>
-          <div style={{
-            fontSize: '12px',
-            fontWeight: '600',
-            color: '#374151',
-            marginBottom: '8px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em'
-          }}>
-            Demo Credentials
-          </div>
-          <div style={{ fontSize: '14px', color: '#6b7280', lineHeight: '1.5' }}>
-            <div><strong>Username:</strong> trashnet</div>
-            <div><strong>Password:</strong> password</div>
-          </div>
-        </div>
       </div>
     </div>
   )

@@ -22,7 +22,7 @@ const AppContent = () => {
   // ===== DEVELOPMENT LOGIN BYPASS =====
   // Set BYPASS_LOGIN to true to skip login and go directly to broker selection
   // Set BYPASS_BROKER_SELECTION to true to skip both login and broker selection entirely
-  const BYPASS_LOGIN = true; // TODO: Set to false for production
+  const BYPASS_LOGIN = false; // TODO: Set to false for production
   const BYPASS_BROKER_SELECTION = false; // TODO: Set to false for production
   // ===================================
 
